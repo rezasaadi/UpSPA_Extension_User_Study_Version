@@ -1,0 +1,29 @@
+{
+  "name": "upspa-relaxed-user-study",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agile, local-first UpSPA browser-extension prototype for usability studies.",
+  "license": "Apache-2.0",
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "pnpm run build:wasm && pnpm run build:client && pnpm run build:extension",
+    "build:wasm": "node ./scripts/build-wasm.mjs",
+    "build:client": "pnpm --filter upspa-js run build",
+    "build:extension": "pnpm --filter upspa-extension run build",
+    "dev:extension": "pnpm run build:wasm && pnpm run build:client && pnpm --filter upspa-extension run dev",
+    "demo:site": "node ./demo/light-login-server/server.mjs",
+    "format:check": "cargo fmt --all -- --check",
+    "lint:rust": "cargo clippy --workspace -- -D warnings",
+    "typecheck": "pnpm --filter upspa-extension exec tsc -p tsconfig.json --noEmit",
+    "test": "pnpm run build:wasm && pnpm run build:client && pnpm run test:unit && pnpm run test:rust",
+    "test:unit": "pnpm run test:client && pnpm run test:extension",
+    "test:client": "pnpm --filter upspa-js run test",
+    "test:extension": "pnpm --filter upspa-extension run test",
+    "test:rust": "cargo test -p upspa-core",
+    "test:go": "go -C services/storage-provider-go test ./...",
+    "verify": "pnpm run build && pnpm run typecheck && pnpm run test:unit && pnpm run format:check && pnpm run lint:rust && pnpm run test:rust"
+  }
+}

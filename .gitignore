@@ -1,0 +1,23 @@
+# Dependencies and generated builds
+node_modules/
+**/node_modules/
+target/
+**/target/
+dist/
+**/dist/
+packages/upspa-js/wasm-pkg/
+coverage/
+
+# Local configuration and transient output
+.env
+.env.*
+!.env.example
+.codex/
+*.log
+*.tmp
+
+# Editor and operating-system files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

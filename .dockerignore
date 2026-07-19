@@ -1,0 +1,9 @@
+.git
+.github
+.codex
+**/node_modules
+**/dist
+**/target
+packages/upspa-js/wasm-pkg
+coverage
+*.log
