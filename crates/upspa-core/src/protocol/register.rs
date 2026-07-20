@@ -1,6 +1,6 @@
-use crate::aead::xchacha_encrypt_detached;
+use crate::aead::xchacha_encrypt_detached_dynamic;
 use crate::hash::{hash_suid, hash_vinfo};
-use crate::protocol::{ciphersp_aad, decrypt_cid, CipherId, CipherSp, CIPHERSP_PT_LEN};
+use crate::protocol::{ciphersp_aad, decrypt_cid, legacy_ciphersp_plaintext, CipherId, CipherSp};
 use crate::types::UpspaError;
 use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -35,11 +35,9 @@ pub fn client_register<R: RngCore + CryptoRng>(
     let mut rlsj = [0u8; 32];
     rng.fill_bytes(&mut rlsj);
     let ctr: u64 = 0;
-    let mut ciphersp_pt = [0u8; CIPHERSP_PT_LEN];
-    ciphersp_pt[0..32].copy_from_slice(&rlsj);
-    ciphersp_pt[32..40].copy_from_slice(&ctr.to_le_bytes());
+    let ciphersp_pt = legacy_ciphersp_plaintext(&rlsj, ctr);
     let aad = ciphersp_aad(uid);
-    let cj = xchacha_encrypt_detached(&k0, &aad, &ciphersp_pt, rng);
+    let cj = xchacha_encrypt_detached_dynamic(&k0, &aad, &ciphersp_pt, rng);
     let vinfo = hash_vinfo(&rlsj, lsj);
     for i in 1..=nsp {
         let suid = hash_suid(&rsp, lsj, i as u32);

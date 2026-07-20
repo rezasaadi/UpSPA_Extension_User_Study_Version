@@ -1,5 +1,7 @@
 use crate::hash::{hash_suid, hash_vinfo};
-use crate::protocol::{decrypt_cid, decrypt_cj, CipherId, CipherSp};
+use crate::protocol::{
+    decrypt_cid, decrypt_cj, CipherId, CipherSp, CredentialKind, StoredCredential,
+};
 use crate::types::UpspaError;
 use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -7,9 +9,11 @@ pub struct AuthQueries {
     pub k0: [u8; 32],
     pub per_sp: Vec<(u32, [u8; 32])>,
 }
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct AuthResult {
-    pub vinfo_prime: [u8; 32],
+    pub credential_kind: CredentialKind,
+    pub vinfo_prime: Option<[u8; 32]>,
+    pub website_password: Option<String>,
     pub best_ctr: u64,
 }
 pub fn client_auth_prepare(
@@ -41,23 +45,30 @@ pub fn client_auth_finish(
             got: 0,
         });
     }
-    let mut best_ctr: u64 = 0;
-    let mut best_rlsj = [0u8; 32];
-    let mut any_ok = false;
+    let mut best = None;
     for cj in cjs {
         let pt = decrypt_cj(uid, k0, cj)?;
-        any_ok = true;
-        if pt.ctr >= best_ctr {
-            best_ctr = pt.ctr;
-            best_rlsj = pt.rlsj;
+        if best
+            .as_ref()
+            .is_none_or(|current: &crate::protocol::CipherSpPlaintext| pt.ctr >= current.ctr)
+        {
+            best = Some(pt);
         }
     }
-    if !any_ok {
-        return Err(UpspaError::Aead);
+    let best = best.ok_or(UpspaError::Aead)?;
+    let best_ctr = best.ctr;
+    match best.credential {
+        StoredCredential::DerivedSecret(rlsj) => Ok(AuthResult {
+            credential_kind: CredentialKind::Derived,
+            vinfo_prime: Some(hash_vinfo(&rlsj, lsj)),
+            website_password: None,
+            best_ctr,
+        }),
+        StoredCredential::EmbeddedWebsitePassword(website_password) => Ok(AuthResult {
+            credential_kind: CredentialKind::EmbeddedPassword,
+            vinfo_prime: None,
+            website_password: Some(website_password),
+            best_ctr,
+        }),
     }
-    let vinfo_prime = hash_vinfo(&best_rlsj, lsj);
-    Ok(AuthResult {
-        vinfo_prime,
-        best_ctr,
-    })
 }

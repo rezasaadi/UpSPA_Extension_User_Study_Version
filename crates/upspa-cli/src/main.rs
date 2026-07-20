@@ -139,6 +139,7 @@ fn main() -> Result<()> {
                 lsj.as_bytes(),
                 &su_q.k0,
                 &cjs,
+                "existing-site-password",
                 &mut rng,
             )?;
             let timestamp = 1_700_000_000u64;
@@ -165,17 +166,18 @@ fn main() -> Result<()> {
                     "per_sp": reg.per_sp.iter().map(|m| serde_json::json!({
                         "sp_id": m.sp_id,
                         "suid_b64": b64_encode(&m.suid),
-                        "cj": ct_to_b64(&m.cj)
+                        "cj": m.cj.to_b64()
                     })).collect::<Vec<_>>()
                 },
                 "authentication": {
-                    "vinfo_prime_b64": b64_encode(&auth_res.vinfo_prime),
+                    "credential_kind": auth_res.credential_kind,
+                    "vinfo_prime_b64": auth_res.vinfo_prime.map(|value| b64_encode(&value)),
                     "best_ctr": auth_res.best_ctr,
                 },
                 "secret_update": {
-                    "vinfo_prime_b64": b64_encode(&su_res.vinfo_prime),
-                    "vinfo_new_b64": b64_encode(&su_res.vinfo_new),
-                    "cj_new": ct_to_b64(&su_res.cj_new),
+                    "credential_kind": su_res.credential_kind,
+                    "previous_credential_kind": su_res.previous_credential_kind,
+                    "cj_new": su_res.cj_new.to_b64(),
                     "old_ctr": su_res.old_ctr,
                     "new_ctr": su_res.new_ctr,
                 },

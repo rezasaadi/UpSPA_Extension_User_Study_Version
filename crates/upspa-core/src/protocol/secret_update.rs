@@ -1,6 +1,7 @@
-use crate::aead::xchacha_encrypt_detached;
-use crate::hash::{hash_suid, hash_vinfo};
-use crate::protocol::{ciphersp_aad, decrypt_cid, decrypt_cj, CipherId, CipherSp, CIPHERSP_PT_LEN};
+use crate::hash::hash_suid;
+use crate::protocol::{
+    decrypt_cid, decrypt_cj, encrypt_embedded_password_cj, CipherId, CipherSp, CredentialKind,
+};
 use crate::types::UpspaError;
 use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -11,8 +12,8 @@ pub struct SecretUpdateQueries {
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SecretUpdateOutput {
-    pub vinfo_prime: [u8; 32],
-    pub vinfo_new: [u8; 32],
+    pub credential_kind: CredentialKind,
+    pub previous_credential_kind: CredentialKind,
     pub cj_new: CipherSp,
     pub old_ctr: u64,
     pub new_ctr: u64,
@@ -36,9 +37,10 @@ pub fn client_secret_update_prepare(
 }
 pub fn client_secret_update_finish<R: RngCore + CryptoRng>(
     uid: &[u8],
-    lsj: &[u8],
+    _lsj: &[u8],
     k0: &[u8; 32],
     cjs: &[CipherSp],
+    website_password: &str,
     rng: &mut R,
 ) -> Result<SecretUpdateOutput, UpspaError> {
     if cjs.is_empty() {
@@ -47,35 +49,24 @@ pub fn client_secret_update_finish<R: RngCore + CryptoRng>(
             got: 0,
         });
     }
-    let mut old_ctr: u64 = 0;
-    let mut old_rlsj = [0u8; 32];
-    let mut any_ok = false;
+    let mut best = None;
     for cj in cjs {
         let pt = decrypt_cj(uid, k0, cj)?;
-        any_ok = true;
-        if pt.ctr >= old_ctr {
-            old_ctr = pt.ctr;
-            old_rlsj = pt.rlsj;
+        if best
+            .as_ref()
+            .is_none_or(|current: &crate::protocol::CipherSpPlaintext| pt.ctr >= current.ctr)
+        {
+            best = Some(pt);
         }
     }
-    if !any_ok {
-        return Err(UpspaError::Aead);
-    }
-    let vinfo_prime = hash_vinfo(&old_rlsj, lsj);
-    // Refresh Cj without rotating the website secret. The website password is
-    // derived from (RLSj, LSj), so preserving RLSj keeps the participant's
-    // existing website password valid while the encrypted SP record receives
-    // a fresh nonce and a monotonically newer counter.
-    let new_ctr = old_ctr.wrapping_add(1);
-    let mut pt = [0u8; CIPHERSP_PT_LEN];
-    pt[0..32].copy_from_slice(&old_rlsj);
-    pt[32..40].copy_from_slice(&new_ctr.to_le_bytes());
-    let aad = ciphersp_aad(uid);
-    let cj_new = xchacha_encrypt_detached(k0, &aad, &pt, rng);
-    let vinfo_new = vinfo_prime;
+    let best = best.ok_or(UpspaError::Aead)?;
+    let old_ctr = best.ctr;
+    let previous_credential_kind = best.credential_kind();
+    let new_ctr = old_ctr.checked_add(1).ok_or(UpspaError::CounterOverflow)?;
+    let cj_new = encrypt_embedded_password_cj(uid, k0, website_password, new_ctr, rng)?;
     Ok(SecretUpdateOutput {
-        vinfo_prime,
-        vinfo_new,
+        credential_kind: CredentialKind::EmbeddedPassword,
+        previous_credential_kind,
         cj_new,
         old_ctr,
         new_ctr,

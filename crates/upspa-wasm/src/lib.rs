@@ -1,7 +1,8 @@
 use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
 use upspa_core::protocol::{
-    authenticate, password_update, register, secret_update, setup, CipherId, CipherSp,
+    authenticate, cipher_sp_from_b64, migration, password_update, register, secret_update, setup,
+    CipherId, CipherSp, CredentialKind,
 };
 use upspa_core::toprf::{ToprfClient, ToprfClientState, ToprfPartial};
 use upspa_core::types::{b64_decode_array, b64_encode, CtBlobB64, UpspaError};
@@ -132,7 +133,13 @@ fn parse_ciphersp(obj: CtBlobIn) -> Result<CipherSp, UpspaError> {
         ct: obj.ct,
         tag: obj.tag,
     };
-    CipherSp::from_b64(&b64)
+    cipher_sp_from_b64(&b64)
+}
+fn credential_kind_label(kind: CredentialKind) -> &'static str {
+    match kind {
+        CredentialKind::Derived => "derived",
+        CredentialKind::EmbeddedPassword => "embedded_password",
+    }
 }
 #[derive(Serialize)]
 pub struct RegistrationSpOut {
@@ -187,6 +194,49 @@ pub fn protocol_register(
     serde_wasm_bindgen::to_value(&RegistrationOut { per_sp, to_ls }).map_err(to_js_error)
 }
 #[derive(Serialize)]
+pub struct MigrationOut {
+    pub credential_kind: &'static str,
+    pub per_sp: Vec<RegistrationSpOut>,
+}
+#[wasm_bindgen]
+pub fn protocol_migrate_existing(
+    uid: String,
+    lsj: String,
+    state_key: String,
+    cid: JsValue,
+    nsp: usize,
+    website_password: String,
+) -> Result<JsValue, JsValue> {
+    let state_key = b64_decode_array::<32>(&state_key).map_err(map_err)?;
+    let cid_in: CtBlobIn = serde_wasm_bindgen::from_value(cid).map_err(to_js_error)?;
+    let cid = parse_cipherid(cid_in).map_err(map_err)?;
+    let mut rng = OsRng;
+    let out = migration::client_migrate_existing(
+        uid.as_bytes(),
+        lsj.as_bytes(),
+        &state_key,
+        &cid,
+        nsp,
+        &website_password,
+        &mut rng,
+    )
+    .map_err(map_err)?;
+    let per_sp = out
+        .per_sp
+        .iter()
+        .map(|message| RegistrationSpOut {
+            sp_id: message.sp_id,
+            suid: b64_encode(&message.suid),
+            cj: message.cj.to_b64(),
+        })
+        .collect();
+    serde_wasm_bindgen::to_value(&MigrationOut {
+        credential_kind: credential_kind_label(out.credential_kind),
+        per_sp,
+    })
+    .map_err(to_js_error)
+}
+#[derive(Serialize)]
 pub struct AuthPrepareOut {
     pub k0: String,
     pub per_sp: Vec<AuthSuidOut>,
@@ -226,7 +276,11 @@ pub fn protocol_auth_prepare(
 }
 #[derive(Serialize)]
 pub struct AuthFinishOut {
-    pub vinfo_prime: String,
+    pub credential_kind: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vinfo_prime: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub website_password: Option<String>,
     pub best_ctr: u64,
 }
 #[wasm_bindgen]
@@ -245,7 +299,9 @@ pub fn protocol_auth_finish(
     let out = authenticate::client_auth_finish(uid.as_bytes(), lsj.as_bytes(), &k0, &cjs_parsed)
         .map_err(map_err)?;
     serde_wasm_bindgen::to_value(&AuthFinishOut {
-        vinfo_prime: b64_encode(&out.vinfo_prime),
+        credential_kind: credential_kind_label(out.credential_kind),
+        vinfo_prime: out.vinfo_prime.map(|value| b64_encode(&value)),
+        website_password: out.website_password,
         best_ctr: out.best_ctr,
     })
     .map_err(to_js_error)
@@ -290,8 +346,8 @@ pub fn protocol_secret_update_prepare(
 }
 #[derive(Serialize)]
 pub struct SecretUpdateFinishOut {
-    pub vinfo_prime: String,
-    pub vinfo_new: String,
+    pub credential_kind: &'static str,
+    pub previous_credential_kind: &'static str,
     pub cj_new: CtBlobB64,
     pub old_ctr: u64,
     pub new_ctr: u64,
@@ -302,6 +358,7 @@ pub fn protocol_secret_update_finish(
     lsj: String,
     k0: String,
     cjs: JsValue,
+    website_password: String,
 ) -> Result<JsValue, JsValue> {
     let k0 = b64_decode_array::<32>(&k0).map_err(map_err)?;
     let cjs_in: Vec<CtBlobIn> = serde_wasm_bindgen::from_value(cjs).map_err(to_js_error)?;
@@ -315,12 +372,13 @@ pub fn protocol_secret_update_finish(
         lsj.as_bytes(),
         &k0,
         &cjs_parsed,
+        &website_password,
         &mut rng,
     )
     .map_err(map_err)?;
     serde_wasm_bindgen::to_value(&SecretUpdateFinishOut {
-        vinfo_prime: b64_encode(&out.vinfo_prime),
-        vinfo_new: b64_encode(&out.vinfo_new),
+        credential_kind: credential_kind_label(out.credential_kind),
+        previous_credential_kind: credential_kind_label(out.previous_credential_kind),
         cj_new: out.cj_new.to_b64(),
         old_ctr: out.old_ctr,
         new_ctr: out.new_ctr,

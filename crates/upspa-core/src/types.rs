@@ -23,6 +23,44 @@ pub struct CtBlob<const PT_LEN: usize> {
     #[serde(with = "serde_big_array::BigArray")]
     pub tag: [u8; TAG_LEN],
 }
+
+/// An authenticated ciphertext whose plaintext length is determined by its
+/// versioned protocol envelope. Fixed-size protocol records continue to use
+/// [`CtBlob`].
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DynamicCtBlob {
+    #[serde(with = "serde_big_array::BigArray")]
+    pub nonce: [u8; NONCE_LEN],
+    pub ct: Vec<u8>,
+    #[serde(with = "serde_big_array::BigArray")]
+    pub tag: [u8; TAG_LEN],
+}
+
+impl DynamicCtBlob {
+    pub fn to_vec(&self) -> Vec<u8> {
+        let mut v = Vec::with_capacity(NONCE_LEN + self.ct.len() + TAG_LEN);
+        v.extend_from_slice(&self.nonce);
+        v.extend_from_slice(&self.ct);
+        v.extend_from_slice(&self.tag);
+        v
+    }
+
+    pub fn to_b64(&self) -> CtBlobB64 {
+        CtBlobB64 {
+            nonce: b64_encode(&self.nonce),
+            ct: b64_encode(&self.ct),
+            tag: b64_encode(&self.tag),
+        }
+    }
+
+    pub fn from_b64(b64: &CtBlobB64) -> Result<Self, UpspaError> {
+        Ok(Self {
+            nonce: b64_decode_array::<NONCE_LEN>(&b64.nonce)?,
+            ct: b64_decode(&b64.ct)?,
+            tag: b64_decode_array::<TAG_LEN>(&b64.tag)?,
+        })
+    }
+}
 impl<const PT_LEN: usize> CtBlob<PT_LEN> {
     pub const WIRE_LEN: usize = NONCE_LEN + PT_LEN + TAG_LEN;
     pub fn to_vec(&self) -> Vec<u8> {
@@ -77,6 +115,16 @@ pub enum UpspaError {
     Signature,
     #[error("ct blob parse error")]
     CtParse,
+    #[error("invalid versioned website credential record")]
+    InvalidCredentialRecord,
+    #[error("website password must not be empty")]
+    EmptyWebsitePassword,
+    #[error("website password is too long: maximum {max} UTF-8 bytes, got {got}")]
+    WebsitePasswordTooLong { max: usize, got: usize },
+    #[error("website password is not valid UTF-8")]
+    InvalidWebsitePasswordUtf8,
+    #[error("credential record counter overflow")]
+    CounterOverflow,
 }
 pub fn b64_encode(bytes: &[u8]) -> String {
     URL_SAFE_NO_PAD.encode(bytes)
