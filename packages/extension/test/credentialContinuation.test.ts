@@ -63,4 +63,40 @@ describe('credential continuation vault', () => {
     await clearCredentialContinuation(42, 'github', 'flow-1');
     await expect(loadCredentialContinuation(42, 'github')).resolves.toBeUndefined();
   });
+
+  it('rejects local-only import and per-site secret-update continuations', async () => {
+    await expect(saveCredentialContinuation({
+      flowId: 'local-only',
+      kind: 'import-existing-account',
+      siteId: 'overleaf',
+      tabId: 7,
+      origin: 'https://www.overleaf.com',
+      material: {
+        kind: 'import-existing-account',
+        oldPasswordForLs: 'existing-password',
+        newPasswordForLs: 'replacement-password',
+      },
+    })).rejects.toThrow('local Cj operations');
+    expect(JSON.stringify(store)).not.toContain('existing-password');
+  });
+
+  it('deletes deprecated website-change continuations without decrypting them', async () => {
+    store.upspa_credential_continuations_v1 = {
+      '9:github': {
+        version: 1,
+        flowId: 'old-flow',
+        kind: 'website-password-update',
+        expectedStage: 'password-change',
+        siteId: 'github',
+        tabId: 9,
+        origin: 'https://github.com',
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 60_000,
+        protectedMaterial: { version: 1, salt: 'invalid', iv: 'invalid', ciphertext: 'invalid' },
+      },
+    };
+
+    await expect(loadCredentialContinuation(9, 'github')).resolves.toBeUndefined();
+    expect(store.upspa_credential_continuations_v1).toEqual({});
+  });
 });

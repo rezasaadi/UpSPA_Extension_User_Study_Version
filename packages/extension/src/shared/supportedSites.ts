@@ -2,6 +2,7 @@ import { normalizePasswordPolicy, type PasswordPolicy } from './passwordPolicy';
 
 export type PrototypeSiteDifficulty = 'easy' | 'medium' | 'hard';
 export type PrototypePolicySource = 'official' | 'signup-page-observed' | 'conservative-prototype';
+export type PrototypeStudyRisk = 'standard' | 'high-risk-detection-only';
 
 export type SupportedPrototypeSite = {
   id: string;
@@ -10,17 +11,23 @@ export type SupportedPrototypeSite = {
   /** Stable origin used when deriving or looking up this provider's credentials. */
   credentialOrigin: string;
   signupUrl: string;
+  /** Official account-acquisition/help information for existing-account-only providers. */
+  registrationInfoUrl?: string;
   loginUrl: string;
   passwordChangeUrl?: string;
   signupUrls?: string[];
   loginUrls?: string[];
   passwordChangeUrls?: string[];
   sharedAuthPage?: boolean;
+  /** False when the provider has no ordinary browser account-registration flow. */
+  registrationSupported?: boolean;
+  /** Marks providers that may be structurally audited but must not receive real study credentials. */
+  studyRisk?: PrototypeStudyRisk;
   credentialMode?: 'password' | 'password-or-federated' | 'passwordless';
   multiStep: {
-    login: true;
-    signup: true;
-    passwordChange: true;
+    login: boolean;
+    signup: boolean;
+    passwordChange: boolean;
   };
   difficulty: PrototypeSiteDifficulty;
   policySource: PrototypePolicySource;
@@ -94,6 +101,32 @@ export const googlePolicy: PasswordPolicy = normalizePasswordPolicy({
 export const applePolicy: PasswordPolicy = normalizePasswordPolicy({
   minLen: 8,
   maxLen: 20,
+  requireUpper: true,
+  requireLower: true,
+  requireDigit: true,
+  requireSymbol: false,
+  allowedSymbols: COMMON_SYMBOLS,
+  forbidWhitespace: true,
+  forbiddenSubstrings: [],
+  source: ['domain-quirk'],
+});
+
+export const drPolicy: PasswordPolicy = normalizePasswordPolicy({
+  minLen: 6,
+  maxLen: 16,
+  requireUpper: false,
+  requireLower: true,
+  requireDigit: true,
+  requireSymbol: false,
+  allowedSymbols: COMMON_SYMBOLS,
+  forbidWhitespace: true,
+  forbiddenSubstrings: [],
+  source: ['domain-quirk'],
+});
+
+export const n11Policy: PasswordPolicy = normalizePasswordPolicy({
+  minLen: 8,
+  maxLen: 15,
   requireUpper: true,
   requireLower: true,
   requireDigit: true,
@@ -217,24 +250,21 @@ const SUPPORTED_PROTOTYPE_SITE_DEFINITIONS: SupportedPrototypeSiteDefinition[] =
     },
   },
   {
-    id: 'x',
-    label: 'X / Twitter',
-    hostnames: ['x.com', 'twitter.com'],
-    signupUrl: 'https://x.com/i/flow/signup',
-    loginUrl: 'https://x.com/i/flow/login',
-    signupUrls: ['https://x.com/signup', 'https://twitter.com/signup', 'https://twitter.com/i/flow/signup'],
-    loginUrls: ['https://x.com/login', 'https://twitter.com/login', 'https://twitter.com/i/flow/login'],
-    passwordChangeUrl: 'https://x.com/settings/password',
-    difficulty: 'hard',
-    policySource: 'conservative-prototype',
-    policyNote: 'X signup is anti-automation and multi-step; use relaxed20Policy and validate manually.',
+    id: 'overleaf',
+    label: 'Overleaf',
+    hostnames: ['overleaf.com', 'www.overleaf.com'],
+    signupUrl: 'https://www.overleaf.com/register',
+    loginUrl: 'https://www.overleaf.com/login',
+    passwordChangeUrl: 'https://www.overleaf.com/user/settings',
+    difficulty: 'easy',
+    policySource: 'official',
+    policyNote: 'Overleaf requires at least 8 characters and rejects common passwords or passwords containing parts of the email address; the registry uses a 16-20 character mixed-case alphanumeric candidate.',
     policy: relaxed20Policy,
     fieldHints: {
-      // Audited on the current staged signup screen. Duplicate hidden DOM
-      // copies are harmless because content filtering keeps the visible one.
-      username: [
-        'input#jf-input-username_or_email[name="username_or_email"][autocomplete~="username"]',
-      ],
+      username: ['input#email[name="email"][type="email"][autocomplete~="username"]'],
+      email: ['input#email[name="email"][type="email"][autocomplete~="username"]'],
+      password: ['input#password[name="password"][type="password"][autocomplete="current-password"]'],
+      newPassword: ['input#password[name="password"][type="password"][autocomplete="new-password"]'],
     },
   },
   {
@@ -284,45 +314,40 @@ const SUPPORTED_PROTOTYPE_SITE_DEFINITIONS: SupportedPrototypeSiteDefinition[] =
     },
   },
   {
-    id: 'gitlab',
-    label: 'GitLab',
-    hostnames: ['gitlab.com'],
-    signupUrl: 'https://gitlab.com/users/sign_up',
-    loginUrl: 'https://gitlab.com/users/sign_in',
-    passwordChangeUrl: 'https://gitlab.com/-/profile/password/edit',
+    id: 'n11',
+    label: 'n11',
+    hostnames: ['n11.com', 'www.n11.com'],
+    signupUrl: 'https://www.n11.com/uye-ol',
+    loginUrl: 'https://www.n11.com/giris-yap',
     difficulty: 'medium',
     policySource: 'signup-page-observed',
-    policyNote: 'Signup page exposes a password field but not stable text policy in static HTML; use relaxed20Policy.',
-    policy: relaxed20Policy,
+    policyNote: 'The current n11 sign-up page requires 8-15 characters with at least one uppercase letter, one lowercase letter, and one digit.',
+    policy: n11Policy,
     fieldHints: {
-      // Stable GitLab Rails field IDs. Cloudflare blocked the current audit, so
-      // keep these fallbacks narrow until they can be reconfirmed in-browser.
-      username: ['input#user_login[name="user[login]"]'],
-      registrationUsername: ['input#new_user_username[name="new_user[username]"]'],
-      email: ['input#new_user_email[name="new_user[email]"][type="email"]'],
-      password: ['input#user_password[name="user[password]"][type="password"]'],
-      newPassword: ['input#new_user_password[name="new_user[password]"][type="password"]'],
+      username: ['input#email[name="email"]'],
+      email: ['input#email[name="email"]'],
+      password: ['input#password[name="password"][type="password"]'],
+      newPassword: ['input#password[name="password"][type="password"]'],
     },
   },
   {
-    id: 'bitbucket',
-    label: 'Bitbucket / Atlassian',
-    hostnames: ['bitbucket.org', 'id.atlassian.com', 'atlassian.com'],
-    credentialOrigin: 'https://id.atlassian.com',
-    signupUrl: 'https://www.atlassian.com/try/cloud/signup?bundle=bitbucket',
-    loginUrl: 'https://bitbucket.org/account/signin/',
-    passwordChangeUrl: 'https://id.atlassian.com/manage-profile/security',
-    difficulty: 'medium',
-    policySource: 'conservative-prototype',
-    policyNote: 'Atlassian account flow is dynamic; use relaxed20Policy.',
+    id: 'biletinial',
+    label: 'Biletinial',
+    hostnames: ['biletinial.com', 'www.biletinial.com'],
+    signupUrl: 'https://biletinial.com/tr-tr/WebLogin/Register?lang=tr',
+    loginUrl: 'https://biletinial.com/tr-tr/WebLogin',
+    difficulty: 'easy',
+    policySource: 'signup-page-observed',
+    policyNote: 'The current registration page requires 8-24 characters with uppercase and lowercase letters and warns against personal information; the compatible registry candidate also includes a digit.',
     policy: relaxed20Policy,
     fieldHints: {
-      // Atlassian rendered no inspectable field during the current audit. The
-      // exact legacy IDs are retained as conservative fallbacks, not claimed
-      // as a current live contract.
-      username: ['input#username[name="username"]'],
-      email: ['input#username[name="username"]'],
-      password: ['input#password[name="password"][type="password"]'],
+      username: ['input[name="UserName"][type="email"]'],
+      email: ['input[name="Email"][type="email"]'],
+      password: ['input#inpPassword[name="inpPassword"][type="password"]'],
+      newPassword: [
+        'input#new_password_input[name="Password"][type="password"]',
+        'input#new_password_confirm[name="PasswordApprove"][type="password"]',
+      ],
     },
   },
   {
@@ -629,25 +654,20 @@ const SUPPORTED_PROTOTYPE_SITE_DEFINITIONS: SupportedPrototypeSiteDefinition[] =
     },
   },
   {
-    id: 'paypal',
-    label: 'PayPal',
-    hostnames: ['paypal.com', 'www.paypal.com'],
-    signupUrl: 'https://www.paypal.com/signup',
-    loginUrl: 'https://www.paypal.com/signin',
-    passwordChangeUrl: 'https://www.paypal.com/myaccount/security',
-    difficulty: 'hard',
-    policySource: 'conservative-prototype',
-    policyNote: 'Financial site with strong anti-abuse; use relaxed20Policy and manual validation only.',
-    policy: relaxed20Policy,
+    id: 'dr',
+    label: 'D&R',
+    hostnames: ['dr.com.tr', 'www.dr.com.tr'],
+    signupUrl: 'https://www.dr.com.tr/uyeol',
+    loginUrl: 'https://www.dr.com.tr/login',
+    difficulty: 'easy',
+    policySource: 'signup-page-observed',
+    policyNote: 'The current D&R sign-up form requires 6-16 characters with at least one letter and one digit.',
+    policy: drPolicy,
     fieldHints: {
-      username: [
-        'input#email',
-        'input[name="login_email"]',
-      ],
-      email: [
-        'input#email',
-        'input[name="login_email"]',
-      ],
+      username: ['form.js-form-signin input[name="email"][type="email"]'],
+      email: ['form.js-form-register input[name="email"][type="email"]'],
+      password: ['form.js-form-signin input#password[name="password"][type="password"]'],
+      newPassword: ['form.js-form-register input#passwordNew[name="password"][type="password"]'],
     },
   },
   {
@@ -764,18 +784,28 @@ const SUPPORTED_PROTOTYPE_SITE_DEFINITIONS: SupportedPrototypeSiteDefinition[] =
     },
   },
   {
-    id: 'medium',
-    label: 'Medium',
-    hostnames: ['medium.com'],
-    signupUrl: 'https://medium.com/m/signin',
-    loginUrl: 'https://medium.com/m/signin',
-    sharedAuthPage: true,
-    credentialMode: 'passwordless',
-    passwordChangeUrl: 'https://medium.com/me/settings',
-    difficulty: 'medium',
+    id: 'edevlet',
+    label: 'Turkey e-Devlet',
+    hostnames: ['giris.turkiye.gov.tr'],
+    credentialOrigin: 'https://giris.turkiye.gov.tr',
+    // e-Devlet has no ordinary web sign-up. This is official information only;
+    // registrationSupported=false prevents it from being classified as sign-up.
+    signupUrl: 'https://www.turkiye.gov.tr/bilgilendirme?konu=sikcaSorulanlar',
+    registrationInfoUrl: 'https://www.turkiye.gov.tr/bilgilendirme?konu=sikcaSorulanlar',
+    loginUrl: 'https://giris.turkiye.gov.tr/Giris/gir',
+    loginUrls: ['https://giris.turkiye.gov.tr/Giris/e-Devlet-Sifresi'],
+    registrationSupported: false,
+    studyRisk: 'high-risk-detection-only',
+    credentialMode: 'password',
+    multiStep: { login: true, signup: false, passwordChange: true },
+    difficulty: 'hard',
     policySource: 'conservative-prototype',
-    policyNote: 'Public authentication is email-link/code or federated; retain this site for auth UI detection, but no password autofill is expected.',
+    policyNote: 'Existing-account login only. The adapter detects T.C. Kimlik No and e-Devlet Şifresi, but real government credentials must never be entered during a study; CAPTCHA and alternate identity methods remain manual.',
     policy: relaxed20Policy,
+    fieldHints: {
+      username: ['input#tridField[name="tridField"][type="number"]'],
+      password: ['input#egpField[name="egpField"][type="password"]'],
+    },
   },
   {
     id: 'quora',

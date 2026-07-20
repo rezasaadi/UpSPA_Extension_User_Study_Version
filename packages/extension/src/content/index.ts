@@ -188,7 +188,9 @@ function continuationOperationIntent(input) {
 
 function hintedPasswordInputs(site, mode) {
   const selectors = mode === 'register'
-    ? [...(site.fieldHints?.newPassword || []), ...(site.fieldHints?.password || [])]
+    ? (site.fieldHints?.newPassword?.length
+      ? site.fieldHints.newPassword
+      : site.fieldHints?.password)
     : site.fieldHints?.password;
   return queryAllVisibleInputs(selectors).filter((input) => passwordInputEligibleForMode(input, mode));
 }
@@ -802,14 +804,6 @@ const REGISTRATION_USERNAME_RULES = {
     max: 30,
     lowercase: true,
   },
-  gitlab: {
-    separator: '-',
-    disallowed: /[^a-zA-Z0-9_.-]+/g,
-    repeated: /[._-]{2,}/g,
-    edges: /^[._-]+|[._-]+$/g,
-    min: 2,
-    max: 64,
-  },
   reddit: {
     separator: '_',
     disallowed: /[^a-zA-Z0-9_-]+/g,
@@ -1345,12 +1339,18 @@ ensureRegistrationSubmitListener(document);
 async function fillRegister(accountId, passwordForLs, uid, metadata = {}, overwrite = false) {
   const site = activePrototypeSite();
   if (!site) return unsupportedPrototypeResponse();
+  if (site.registrationSupported === false) {
+    return { ok: false, error: `${site.label} supports existing-account login only.` };
+  }
 
   const formTarget = await waitFor(() => {
     const hinted = hintedPasswordInputs(site, 'register');
-    const passwordInputs = [...hinted, ...choosePasswordInputs('register')]
-      .filter((input, index, all) => all.indexOf(input) === index)
-      .sort(documentOrder);
+    const discovered = choosePasswordInputs('register');
+    const passwordInputs = hinted.length > 0
+      ? [...hinted, ...discovered.filter((input) => sameFormOrContainer(input, hinted[0]))]
+        .filter((input, index, all) => all.indexOf(input) === index)
+        .sort(documentOrder)
+      : discovered;
     const username = queryFirst(site.fieldHints?.registrationUsername)
       || queryFirst(site.fieldHints?.email)
       || queryFirst(site.fieldHints?.username)
@@ -1392,6 +1392,9 @@ async function fillRegister(accountId, passwordForLs, uid, metadata = {}, overwr
 async function fillIdentity(accountId, uid, overwrite = false) {
   const site = activePrototypeSite();
   if (!site) return unsupportedPrototypeResponse();
+  if (site.registrationSupported === false) {
+    return { ok: false, error: `${site.label} supports existing-account login only.` };
+  }
 
   const target = await waitFor(() => {
     const passwordInput = choosePasswordInputs('register')[0];

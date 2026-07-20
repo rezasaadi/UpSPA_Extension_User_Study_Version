@@ -372,6 +372,99 @@ describe('multi-step content filling', () => {
     expect((document.getElementById('github-password') as HTMLInputElement).value).toBe('github-login-secret');
   });
 
+  it('fills only the exact e-Devlet login fields and refuses registration', async () => {
+    setLocation('https://giris.turkiye.gov.tr/Giris/gir');
+    document.body.innerHTML = [
+      '<form id="loginForm">',
+      '<input id="encTridField" name="encTridField" type="hidden">',
+      '<input id="tridField" name="tridField" type="number" maxlength="11" inputmode="numeric" aria-label="T. C. Kimlik Numaranızı Girin">',
+      '<input id="egpField" name="egpField" type="password" aria-label="e-Devlet Şifrenizi Girin">',
+      '<input id="encEgpField" name="encEgpField" type="hidden">',
+      '<input id="captchaField" name="captchaField" type="text" maxlength="5">',
+      '</form>',
+    ].join('');
+
+    const login = await dispatch({
+      type: 'UPSPA_FILL_LOGIN',
+      payload: {
+        siteId: 'edevlet',
+        accountId: '11111111111',
+        passwordForLs: 'synthetic-study-secret',
+        overwrite: true,
+      },
+    });
+
+    expect(login).toMatchObject({ ok: true, filled: { username: true, passwords: 1 } });
+    expect((document.getElementById('tridField') as HTMLInputElement).value).toBe('11111111111');
+    expect((document.getElementById('egpField') as HTMLInputElement).value).toBe('synthetic-study-secret');
+    expect((document.getElementById('captchaField') as HTMLInputElement).value).toBe('');
+    expect((document.getElementById('encTridField') as HTMLInputElement).value).toBe('');
+    expect((document.getElementById('encEgpField') as HTMLInputElement).value).toBe('');
+
+    const registration = await dispatch({
+      type: 'UPSPA_FILL_REGISTER',
+      payload: {
+        siteId: 'edevlet',
+        accountId: '11111111111',
+        passwordForLs: 'must-not-be-filled',
+        overwrite: true,
+      },
+    });
+    expect(registration).toMatchObject({ ok: false });
+    expect((document.getElementById('egpField') as HTMLInputElement).value).toBe('synthetic-study-secret');
+  });
+
+  it('keeps D&R login and registration values inside their adjacent forms', async () => {
+    setLocation('https://www.dr.com.tr/uyeol');
+    document.body.innerHTML = [
+      '<form class="auth-page__form js-form-signin">',
+      '<input id="email" name="email" type="email">',
+      '<input id="password" name="password" type="password">',
+      '</form>',
+      '<form class="auth-page__form js-form-register">',
+      '<input id="firstName" name="firstName">',
+      '<input id="lastName" name="lastName">',
+      '<input id="email" name="email" type="email">',
+      '<input id="passwordNew" name="password" type="password" maxlength="16">',
+      '</form>',
+    ].join('');
+
+    const forms = document.querySelectorAll('form');
+    const loginForm = forms[0] as HTMLFormElement;
+    const registrationForm = forms[1] as HTMLFormElement;
+    const registration = await dispatch({
+      type: 'UPSPA_FILL_REGISTER',
+      payload: {
+        siteId: 'dr',
+        accountId: 'study@example.invalid',
+        passwordForLs: 'Register123',
+        overwrite: true,
+      },
+    });
+
+    expect(registration).toMatchObject({ ok: true, filled: { username: true, passwords: 1 } });
+    expect((registrationForm.elements.namedItem('email') as HTMLInputElement).value).toBe('study@example.invalid');
+    expect((registrationForm.querySelector('#passwordNew') as HTMLInputElement).value).toBe('Register123');
+    expect((loginForm.elements.namedItem('email') as HTMLInputElement).value).toBe('');
+    expect((loginForm.querySelector('#password') as HTMLInputElement).value).toBe('');
+    expect((registrationForm.elements.namedItem('firstName') as HTMLInputElement).value).toBe('');
+    expect((registrationForm.elements.namedItem('lastName') as HTMLInputElement).value).toBe('');
+
+    const login = await dispatch({
+      type: 'UPSPA_FILL_LOGIN',
+      payload: {
+        siteId: 'dr',
+        accountId: 'study@example.invalid',
+        passwordForLs: 'Login123',
+        overwrite: true,
+      },
+    });
+    expect(login).toMatchObject({ ok: true, filled: { username: true, passwords: 1 } });
+    expect((loginForm.elements.namedItem('email') as HTMLInputElement).value).toBe('study@example.invalid');
+    expect((loginForm.querySelector('#password') as HTMLInputElement).value).toBe('Login123');
+    expect((registrationForm.querySelector('#passwordNew') as HTMLInputElement).value).toBe('Register123');
+  });
+
   it('renders the field launcher in isolated shadow DOM and can display the embedded panel fallback', async () => {
     document.body.innerHTML = [
       '<style>button { display: none !important; width: 1px !important; }</style>',

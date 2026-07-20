@@ -9,14 +9,19 @@ import {
 import { LocalStorageProviderClient } from './localSpClient';
 export type PreparedSecretUpdate = {
   uid: string;
-  oldForLs: string;
-  // Kept for wire/API compatibility. A saved-record refresh preserves RLSj,
-  // so this value must be identical to oldForLs and the website password does
-  // not change.
-  newForLs: string;
+  previousCredentialKind: 'derived' | 'embedded-password';
   cjNew: CtBlobB64;
+  oldCounter: number;
+  newCounter: number;
   suids: Array<{ sp_id: number; suid: string }>;
 };
+export type PreparedMigration = {
+  uid: string;
+  records: RegistrationSpOut[];
+};
+export type RecoveredSiteCredential =
+  | { kind: 'derived'; secretForLs: string; counter: number }
+  | { kind: 'embedded-password'; password: string; counter: number };
 export type PreparedRegistration = {
   uid: string;
   passwordForLs: string;
@@ -155,24 +160,54 @@ export async function commitRegistrationForSite(
   const client = await makeUpspaClient(prepared.uid);
   await client.applyRegistrationToSPs(prepared.records);
 }
-export async function authenticateForSite(lsj: string, password: string, uid?: string): Promise<string> {
+export async function prepareMigrationForSite(
+  lsj: string,
+  masterPassword: string,
+  websitePassword: string,
+  uid?: string,
+): Promise<PreparedMigration> {
+  if (!masterPassword) throw new Error('Master password is empty.');
+  if (!websitePassword) throw new Error('Website password is empty.');
+  const client = await makeUpspaClient(uid);
+  const out = await client.prepareMigration(lsj, masterPassword, websitePassword);
+  return { uid: client.uid, records: out.per_sp };
+}
+
+export async function commitMigrationForSite(prepared: PreparedMigration): Promise<void> {
+  const client = await makeUpspaClient(prepared.uid);
+  await client.applyMigrationToSPs(prepared.records);
+}
+
+export async function authenticateForSite(
+  lsj: string,
+  password: string,
+  uid?: string,
+): Promise<RecoveredSiteCredential> {
   const client = await makeUpspaClient(uid);
   const out = await client.authenticate(lsj, password);
-  return out.vinfo_prime;
+  if (out.credential_kind === 'embedded_password') {
+    return { kind: 'embedded-password', password: out.website_password, counter: out.best_ctr };
+  }
+  return { kind: 'derived', secretForLs: out.vinfo_prime, counter: out.best_ctr };
 }
 export async function prepareSecretUpdateForSite(
   lsj: string,
   masterPassword: string,
+  websitePassword: string,
   uid?: string,
 ): Promise<PreparedSecretUpdate> {
   if (!masterPassword) throw new Error('Master password is empty.');
+  if (!websitePassword) throw new Error('Website password is empty.');
   const client = await makeUpspaClient(uid);
-  const out = await client.secretUpdate(lsj, masterPassword);
+  const out = await client.secretUpdate(lsj, masterPassword, websitePassword);
   return {
     uid: client.uid,
-    oldForLs: out.vinfo_prime,
-    newForLs: out.vinfo_new,
+    previousCredentialKind: out.previous_credential_kind === 'embedded_password'
+      ? 'embedded-password'
+      : 'derived',
     cjNew: out.cj_new,
+    oldCounter: out.old_ctr,
+    newCounter: out.new_ctr,
     suids: out.suids,
   };
 }
@@ -186,13 +221,11 @@ export async function commitSecretUpdateForSite(
 export async function secretUpdateForSite(
   lsj: string,
   masterPassword: string,
+  websitePassword: string,
   uid?: string,
-): Promise<{ oldForLs: string; newForLs: string }> {
-  const prepared = await prepareSecretUpdateForSite(lsj, masterPassword, uid);
-  return {
-    oldForLs: prepared.oldForLs,
-    newForLs: prepared.newForLs,
-  };
+): Promise<{ previousCredentialKind: PreparedSecretUpdate['previousCredentialKind']; counter: number }> {
+  const prepared = await prepareSecretUpdateForSite(lsj, masterPassword, websitePassword, uid);
+  return { previousCredentialKind: prepared.previousCredentialKind, counter: prepared.newCounter };
 }
 export async function passwordUpdateDirect(
   oldPassword: string,

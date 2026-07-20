@@ -18,6 +18,24 @@ describe('extension frame coverage', () => {
     expect(manifest.host_permissions).not.toContain('<all_urls>');
     expect(manifest.permissions).not.toContain('scripting');
     expect(manifest.host_permissions).toContain('*://*.github.com/*');
+    expect(manifest.host_permissions).toEqual(expect.arrayContaining([
+      '*://*.overleaf.com/*',
+      '*://*.giris.turkiye.gov.tr/*',
+      '*://*.dr.com.tr/*',
+      '*://*.biletinial.com/*',
+      '*://*.n11.com/*',
+    ]));
+    for (const removedMatch of [
+      '*://*.x.com/*',
+      '*://*.twitter.com/*',
+      '*://*.gitlab.com/*',
+      '*://*.bitbucket.org/*',
+      '*://*.paypal.com/*',
+      '*://*.medium.com/*',
+      '*://*.turkiye.gov.tr/*',
+    ]) {
+      expect(manifest.host_permissions).not.toContain(removedMatch);
+    }
     expect(manifest.content_scripts?.[0]?.matches).toEqual(manifest.host_permissions);
     expect(manifest.web_accessible_resources?.[0]?.matches).toEqual(manifest.host_permissions);
   });

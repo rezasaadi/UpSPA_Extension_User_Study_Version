@@ -95,19 +95,32 @@ chrome.runtime.onMessage.addListener((msg: BgRequest | RuntimeExtensionEventMess
         case 'UPSRA_AUTH': {
           const { client } = await getClient();
           const out = await client.authenticate(msg.lsj, msg.password);
-          return {
-            ok: true,
-            vinfo_prime_b64: out.vinfo_prime,
-          };
+          return out.credential_kind === 'embedded_password'
+            ? {
+                ok: true,
+                credential: {
+                  credential_kind: 'embedded_password',
+                  website_password: out.website_password,
+                  best_ctr: out.best_ctr,
+                },
+              }
+            : {
+                ok: true,
+                credential: {
+                  credential_kind: 'derived',
+                  vinfo_prime_b64: out.vinfo_prime,
+                  best_ctr: out.best_ctr,
+                },
+              };
         }
         case 'UPSRA_SECRET_UPDATE_PREP': {
           const { client } = await getClient();
-          const out = await client.secretUpdate(msg.lsj, msg.password);
+          const out = await client.secretUpdate(msg.lsj, msg.password, msg.website_password);
           return {
             ok: true,
             secret_update: {
-              vinfo_prime_b64: out.vinfo_prime,
-              vinfo_new_b64: out.vinfo_new,
+              credential_kind: 'embedded_password',
+              previous_credential_kind: out.previous_credential_kind,
               cj_new: out.cj_new,
               suids: out.suids,
               old_ctr: out.old_ctr,

@@ -17,6 +17,12 @@ describe('hardcoded page classification', () => {
     expect(classifyPage('https://example.invalid/login').kind).toBe('unsupported');
   });
 
+  it('keeps e-Devlet existing-account-only and never classifies its official help URL as sign-up', () => {
+    expect(classifyPage('https://giris.turkiye.gov.tr/Giris/gir').kind).toBe('login');
+    expect(classifyPage('https://giris.turkiye.gov.tr/Giris/e-Devlet-Sifresi').kind).toBe('login');
+    expect(classifyPage('https://www.turkiye.gov.tr/bilgilendirme?konu=sikcaSorulanlar').kind).toBe('unsupported');
+  });
+
   it('matches hardcoded localized route patterns without classifying the whole host', () => {
     expect(classifyPage('https://www.spotify.com/tr-tr/signup').kind).toBe('sign-up');
     expect(classifyPage('https://accounts.spotify.com/en/login').kind).toBe('login');

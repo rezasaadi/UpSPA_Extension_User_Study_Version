@@ -112,6 +112,9 @@ async function writeStore(store: ContinuationStore): Promise<void> {
 }
 
 export async function saveCredentialContinuation(input: CredentialContinuationInput): Promise<void> {
+  if (input.kind === 'import-existing-account' || input.kind === 'website-password-update') {
+    throw new Error('Per-site import and secret update are local Cj operations and cannot create website continuations.');
+  }
   const createdAt = input.createdAt ?? Date.now();
   const expiresAt = input.expiresAt ?? createdAt + CREDENTIAL_CONTINUATION_TTL_MS;
   const vaultPassword = await getVaultPassword();
@@ -157,6 +160,13 @@ export async function loadCredentialContinuation(
   const key = recordKey(tabId, siteId);
   const stored = store[key];
   if (!stored) return undefined;
+  if (stored.kind === 'import-existing-account' || stored.kind === 'website-password-update') {
+    // Discard records created by older builds so they can never resume a
+    // website password-change form after the local-only Cj migration.
+    delete store[key];
+    await writeStore(store);
+    return undefined;
+  }
   if (stored.version !== 1 || stored.expiresAt <= Date.now()) {
     delete store[key];
     await writeStore(store);

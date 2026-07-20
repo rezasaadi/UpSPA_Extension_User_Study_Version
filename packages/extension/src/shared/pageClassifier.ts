@@ -60,7 +60,8 @@ export function classifySupportedPage(site: SupportedPrototypeSite, url: string)
 
   // A password-change route wins when providers reuse a host or route prefix.
   if (anyRouteMatches(parsed, site.passwordChangeUrl, site.passwordChangeUrls)) return 'password-change';
-  const signupMatches = anyRouteMatches(parsed, site.signupUrl, site.signupUrls);
+  const signupMatches = site.registrationSupported !== false
+    && anyRouteMatches(parsed, site.signupUrl, site.signupUrls);
   const loginMatches = anyRouteMatches(parsed, site.loginUrl, site.loginUrls);
   if (signupMatches && loginMatches) return 'auth-choice';
   if (signupMatches) return 'sign-up';

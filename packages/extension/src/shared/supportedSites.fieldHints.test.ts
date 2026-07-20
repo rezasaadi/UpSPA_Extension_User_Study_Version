@@ -113,9 +113,10 @@ describe('audited provider field hints', () => {
         passwordId: 'password_text_field',
       },
       {
-        siteId: 'x',
-        html: '<input id="jf-input-username_or_email" name="username_or_email" autocomplete="username webauthn">',
-        usernameId: 'jf-input-username_or_email',
+        siteId: 'overleaf',
+        html: '<input id="email" name="email" type="email" autocomplete="username"><input id="password" name="password" type="password" autocomplete="current-password">',
+        usernameId: 'email',
+        passwordId: 'password',
       },
       {
         siteId: 'facebook',
@@ -165,9 +166,10 @@ describe('audited provider field hints', () => {
         passwordId: 'netflix-pass',
       },
       {
-        siteId: 'paypal',
-        html: '<input id="email" name="login_email">',
+        siteId: 'dr',
+        html: '<form class="js-form-signin"><input id="email" name="email" type="email"><input id="password" name="password" type="password"></form>',
         usernameId: 'email',
+        passwordId: 'password',
       },
       {
         siteId: 'twitch',
@@ -264,6 +266,49 @@ describe('audited provider field hints', () => {
     expect(hintedElements('apple', 'email').map((element) => element.id)).not.toContain('apple-phone');
   });
 
+  it('matches the replacement-provider contracts without targeting adjacent or sensitive fields', () => {
+    document.body.innerHTML = [
+      '<form class="auth-page__form js-form-signin"><input id="email" name="email" type="email"><input id="password" name="password" type="password"></form>',
+      '<form class="auth-page__form js-form-register"><input id="email" name="email" type="email"><input id="passwordNew" name="password" type="password"></form>',
+    ].join('');
+    expect(firstHintedElement('dr', 'username')?.closest('form')?.classList).toContain('js-form-signin');
+    expect(firstHintedElement('dr', 'password')?.id).toBe('password');
+    expect(firstHintedElement('dr', 'email')?.closest('form')?.classList).toContain('js-form-register');
+    expect(firstHintedElement('dr', 'newPassword')?.id).toBe('passwordNew');
+
+    document.body.innerHTML = [
+      '<input name="q" type="search">',
+      '<input id="biletinial-login" name="UserName" type="email">',
+      '<input id="inpPassword" name="inpPassword" type="password">',
+      '<input id="biletinial-signup" name="Email" type="email">',
+      '<input id="new_password_input" name="Password" type="password">',
+      '<input id="new_password_confirm" name="PasswordApprove" type="password">',
+      '<input id="BirthDate" name="BirthDate">',
+    ].join('');
+    expect(firstHintedElement('biletinial', 'username')?.id).toBe('biletinial-login');
+    expect(firstHintedElement('biletinial', 'email')?.id).toBe('biletinial-signup');
+    expect(firstHintedElement('biletinial', 'password')?.id).toBe('inpPassword');
+    expect(hintedElements('biletinial', 'newPassword').map((element) => element.id)).toEqual([
+      'new_password_input',
+      'new_password_confirm',
+    ]);
+
+    document.body.innerHTML = '<input id="email" name="email"><input id="password" name="password" type="password">';
+    expect(firstHintedElement('n11', 'username')?.id).toBe('email');
+    expect(firstHintedElement('n11', 'password')?.id).toBe('password');
+
+    document.body.innerHTML = [
+      '<input id="encTridField" name="encTridField" type="hidden">',
+      '<input id="tridField" name="tridField" type="number">',
+      '<input id="egpField" name="egpField" type="password">',
+      '<input id="encEgpField" name="encEgpField" type="hidden">',
+      '<input id="captchaField" name="captchaField">',
+    ].join('');
+    expect(firstHintedElement('edevlet', 'username')?.id).toBe('tridField');
+    expect(firstHintedElement('edevlet', 'password')?.id).toBe('egpField');
+    expect(identifierSelectors(site('edevlet')).join(' ')).not.toMatch(/captcha|encTrid|encEgp/i);
+  });
+
   it('keeps staged registration username and email selectors separate', () => {
     const contracts: Array<{
       siteId: string;
@@ -276,12 +321,6 @@ describe('audited provider field hints', () => {
         html: '<input id="instagram-username" type="search" placeholder="Username"><input id="instagram-email" name="emailOrPhone">',
         registrationUsernameId: 'instagram-username',
         emailId: 'instagram-email',
-      },
-      {
-        siteId: 'gitlab',
-        html: '<input id="new_user_username" name="new_user[username]"><input id="new_user_email" name="new_user[email]" type="email">',
-        registrationUsernameId: 'new_user_username',
-        emailId: 'new_user_email',
       },
       {
         siteId: 'reddit',
@@ -384,13 +423,8 @@ describe('audited provider field hints', () => {
     );
   });
 
-  it('gives every password-capable provider at least one scoped identifier hint', () => {
+  it('gives every provider at least one scoped identifier hint', () => {
     for (const candidate of SUPPORTED_PROTOTYPE_SITES) {
-      if (candidate.credentialMode === 'passwordless') {
-        expect(candidate.id).toBe('medium');
-        continue;
-      }
-
       const selectors = identifierSelectors(candidate);
       expect(selectors.length, candidate.id).toBeGreaterThan(0);
       for (const selector of selectors) {

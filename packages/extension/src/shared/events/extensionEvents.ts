@@ -126,6 +126,7 @@ export type ExtensionEvent =
   | (BaseEvent & { type: 'USER_REQUESTED_WEBSITE_RECORD_REFRESH'; siteId: string; accountId?: string })
   | (BaseEvent & { type: 'USER_REQUESTED_MASTER_PASSWORD_UPDATE' })
   | (BaseEvent & { type: 'USER_CONFIRMED_ACCOUNT_CREATED'; flowId: string })
+  | (BaseEvent & { type: 'USER_CONFIRMED_EXISTING_ACCOUNT_IMPORTED'; flowId: string })
   | (BaseEvent & { type: 'USER_CONFIRMED_WEBSITE_RECORD_REFRESHED'; flowId: string })
   | (BaseEvent & { type: 'FLOW_RESTORED'; flowId: string; kind: string; stage: string })
   | (BaseEvent & { type: 'FLOW_CANCELLED'; flowId?: string; reason?: string })

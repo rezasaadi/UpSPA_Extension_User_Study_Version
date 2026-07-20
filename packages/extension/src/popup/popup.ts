@@ -53,9 +53,11 @@ import { MIN_MASTER_PASSWORD_LENGTH, meetsMasterPasswordLength } from '../shared
 import { type SupportedPrototypeSite } from '../shared/supportedSites';
 import {
   authenticateForSite,
+  commitMigrationForSite,
   commitRegistrationForSite,
   commitSecretUpdateForSite,
   passwordUpdateDirect,
+  prepareMigrationForSite,
   prepareRegistrationForSite,
   prepareSecretUpdateForSite,
 } from '../shared/upspaActions';
@@ -89,6 +91,8 @@ const pickerTitleEl = byId<HTMLHeadingElement>('pickerTitle');
 const pickerDescriptionEl = byId<HTMLParagraphElement>('pickerDescription');
 const pickerAccountsEl = byId<HTMLDivElement>('pickerAccounts');
 const pickerContinueButton = byId<HTMLButtonElement>('pickerContinue');
+const addAccountChoiceDescriptionEl = byId<HTMLParagraphElement>('addAccountChoiceDescription');
+const createNewAccountButton = byId<HTMLButtonElement>('createNewAccount');
 const detailsTitleEl = byId<HTMLHeadingElement>('detailsTitle');
 const detailsDescriptionEl = byId<HTMLParagraphElement>('detailsDescription');
 const detailsSiteEl = byId<HTMLDivElement>('detailsSite');
@@ -200,6 +204,13 @@ async function emit(event: ExtensionEventInput): Promise<void> {
 }
 
 function showScreen(screen: PrototypeScreen, reason?: string): void {
+  if (screen === 'add-account-choice') {
+    const registrationSupported = activeSite?.registrationSupported !== false;
+    createNewAccountButton.classList.toggle('hidden', !registrationSupported);
+    addAccountChoiceDescriptionEl.textContent = registrationSupported
+      ? 'Choose whether you are creating a new website account or enrolling one you already use.'
+      : 'This provider does not support normal website registration. Import an existing password locally instead.';
+  }
   appEl.dataset.screen = screen;
   appEl.dataset.layout = WORKFLOW_SCREENS.has(screen) ? 'workflow' : 'auth';
   document.querySelectorAll<HTMLElement>('.screen').forEach((element) => element.classList.add('hidden'));
@@ -508,11 +519,11 @@ function showAccountPicker(mode: PickerMode): void {
   const copy = mode === 'sign-in'
     ? ['Choose an account', 'Choose the account you want to use to sign in.']
     : mode === 'website-password-update'
-      ? ['Refresh Saved Website Record', 'Choose the account whose encrypted UpSPA Cj record should be refreshed. The website password will not change.']
+      ? ['Update Saved Per-Site Secret', 'Choose the account whose encrypted Cj should be rebuilt from its current website password. The website will not be contacted.']
       : ['Saved accounts', 'Choose an account or add another account for this website.'];
   pickerTitleEl.textContent = copy[0];
   pickerDescriptionEl.textContent = copy[1];
-  pickerContinueButton.textContent = mode === 'sign-in' ? 'Sign in with selected account' : mode === 'website-password-update' ? 'Refresh selected record' : 'Use selected account';
+  pickerContinueButton.textContent = mode === 'sign-in' ? 'Sign in with selected account' : mode === 'website-password-update' ? 'Update selected Cj' : 'Use selected account';
   pickerAccountsEl.innerHTML = '';
 
   if (!siteAccounts.length) {
@@ -616,7 +627,7 @@ async function openLoginForAccount(accountId: string): Promise<void> {
   showMasterAuth(accountId);
 }
 
-async function openPasswordChangeForAccount(accountId: string): Promise<void> {
+async function openSecretUpdateForAccount(accountId: string): Promise<void> {
   requireActiveSite();
   await saveFlow('website-password-update', 'password-settings', accountId);
   showSettings('website-password-update');
@@ -628,19 +639,12 @@ function showDetails(kind: 'website-signup' | 'import-existing-account'): void {
   siteAccountIdEl.value = currentFlow?.accountId || siteAccountIdEl.value;
   siteDetailsMasterPasswordEl.value = '';
   const isImport = kind === 'import-existing-account';
-  const needsPasswordPage = activePageKind === 'password-change';
   detailsTitleEl.textContent = isImport ? 'Add an existing account' : 'Save Login Information';
   detailsDescriptionEl.textContent = isImport
-    ? needsPasswordPage
-      ? 'Confirm the account identity, then prepare a new UpSPA website password.'
-      : 'Tell UpSPA which existing account you will sign in to on the website.'
+    ? 'Enter the existing website account ID. UpSPA will import its current password entirely inside the extension; no website page will be opened or changed.'
     : 'Enter the website account ID first. UpSPA will fill it before asking once for your master password.';
-  detailsMasterFieldEl.classList.toggle('hidden', !isImport || !needsPasswordPage || Boolean(transientMasterPassword));
-  detailsContinueButton.textContent = isImport && !needsPasswordPage
-    ? 'Continue to website sign in'
-    : isImport
-      ? 'Continue to password settings'
-      : 'Fill account ID first';
+  detailsMasterFieldEl.classList.add('hidden');
+  detailsContinueButton.textContent = isImport ? 'Continue' : 'Fill account ID first';
   showScreen('site-account-details');
 }
 
@@ -657,36 +661,35 @@ function showSettings(kind: 'website-signup' | 'import-existing-account' | 'webs
   candidateFieldEl.classList.add('hidden');
   const isImport = kind === 'import-existing-account';
   const isUpdate = kind === 'website-password-update';
-  policyCardEl.classList.toggle('hidden', isUpdate);
-  generateCandidateButton.classList.toggle('hidden', isUpdate);
+  policyCardEl.classList.toggle('hidden', isImport || isUpdate);
+  generateCandidateButton.classList.toggle('hidden', isImport || isUpdate);
   existingPasswordFieldEl.classList.toggle('hidden', !isImport && !isUpdate);
-  settingsTitleEl.textContent = isUpdate ? 'Refresh Saved Website Record' : isImport ? 'Secure an existing account' : 'Password settings';
+  settingsTitleEl.textContent = isUpdate ? 'Update Saved Per-Site Secret' : isImport ? 'Secure an existing account' : 'Password settings';
   settingsDescriptionEl.textContent = isUpdate
-    ? 'Enter the current website password. UpSPA will verify it, refresh only the encrypted Cj record in extension storage, and keep the website password unchanged.'
+    ? 'Enter the current password for this website. UpSPA will rebuild and locally replace Cj with that exact password. It will not open, submit, or change anything on the website.'
     : isImport
-      ? 'The current website password is encrypted temporarily while UpSPA completes this multi-step flow, then removed.'
+      ? 'Enter the existing website password and your master password. The website password will be protected inside a new Cj and will not be replaced or sent to the website.'
       : 'On a staged form, click the website Continue button after the account ID is filled. Then enter the master password once and UpSPA will fill the password step.';
   settingsSubmitButton.textContent = isUpdate
-    ? 'Verify password and refresh record'
+    ? 'Replace encrypted Cj locally'
     : isImport
-      ? 'Prepare and fill password change'
+      ? 'Import existing password'
       : 'Generate and fill sign-up form';
   showScreen('site-password-settings');
 }
 
-function showWaiting(kind: FlowKind): void {
-  const isImport = kind === 'import-existing-account';
-  waitingTitleEl.textContent = isImport ? 'Waiting for existing-account confirmation' : 'Waiting for account confirmation';
-  waitingDescriptionEl.textContent = 'After the website confirms that your account was created or updated, return here and confirm.';
+function showWaiting(): void {
+  waitingTitleEl.textContent = 'Waiting for account confirmation';
+  waitingDescriptionEl.textContent = 'After the website confirms that your account was created, return here and confirm.';
   const canReuseMasterPassword = Boolean(transientMasterPassword);
   waitingDetailEl.textContent = canReuseMasterPassword
     ? 'UpSPA is unlocked in temporary extension-session memory for up to 30 minutes. Lock clears it immediately.'
     : 'The pending UpSPA material is encrypted. Enter the master password to unlock the confirmation step.';
   confirmationMasterPasswordEl.value = '';
   confirmationMasterFieldEl.classList.toggle('hidden', canReuseMasterPassword);
-  confirmOperationButton.textContent = isImport ? 'Existing account updated' : 'Account created';
+  confirmOperationButton.textContent = 'Account created';
   resumePendingFillButton.classList.remove('hidden');
-  resumePendingFillButton.textContent = isImport ? 'Prepare fields again' : 'Fill website form again';
+  resumePendingFillButton.textContent = 'Fill website form again';
   showScreen('waiting-confirmation');
 }
 
@@ -702,23 +705,34 @@ async function handleAuthenticate(): Promise<void> {
   const account = await getAccountForOrigin(activeCredentialOrigin, accountId);
   const masterPassword = masterAuthPasswordEl.value;
   if (!account) throw new Error('Choose a saved website account first.');
-  if (!account.passwordPolicy || account.encoderCounter === undefined) throw new Error('This saved account is missing password-policy data. Enroll it again.');
   if (!masterPassword) throw new Error('Enter your master password.');
 
   await emit({ type: 'USER_REQUESTED_SITE_SIGNIN', source: 'popup', siteId: requireActiveSite().id, accountId });
-  const rawPassword = await authenticateForSite(makeLsj(activeCredentialOrigin, accountId), masterPassword, account.uid);
+  const recovered = await authenticateForSite(makeLsj(activeCredentialOrigin, accountId), masterPassword, account.uid);
   await unlockWithMasterPassword(masterPassword);
   const config = await getConfig();
-  const encoded = await encodeForAccount({
-    secretForLs: rawPassword,
-    policy: account.passwordPolicy,
-    accountId,
-    counter: account.passwordCounter ?? account.encoderCounter,
-    origin: activeCredentialOrigin,
-    uid: account.uid || config.uid,
-    suid: account.suid || account.storageProviderSuids?.[0]?.suid || '',
-    metadata: account.passwordMetadata,
-  });
+  let websitePassword: string;
+  if (recovered.kind === 'embedded-password') {
+    websitePassword = recovered.password;
+    if (account.credentialMode !== 'embedded-password') {
+      await upsertAccountForOrigin(activeCredentialOrigin, { ...account, credentialMode: 'embedded-password' });
+    }
+  } else {
+    if (!account.passwordPolicy || account.encoderCounter === undefined) {
+      throw new Error('This derived credential is missing password-policy data. Enroll it again.');
+    }
+    const encoded = await encodeForAccount({
+      secretForLs: recovered.secretForLs,
+      policy: account.passwordPolicy,
+      accountId,
+      counter: account.passwordCounter ?? account.encoderCounter,
+      origin: activeCredentialOrigin,
+      uid: account.uid || config.uid,
+      suid: account.suid || account.storageProviderSuids?.[0]?.suid || '',
+      metadata: account.passwordMetadata,
+    });
+    websitePassword = encoded.password;
+  }
   const flow = currentFlow?.kind === 'website-signin'
     ? await advanceFlow('filling', { accountId })
     : await saveFlow('website-signin', 'filling', accountId);
@@ -726,11 +740,11 @@ async function handleAuthenticate(): Promise<void> {
     kind: 'authentication',
     accountId,
     uid: account.uid || config.uid,
-    passwordForLs: encoded.password,
+    passwordForLs: websitePassword,
   }, flow.flowId);
   const response = await fillOrThrow({
     type: 'UPSPA_FILL_LOGIN',
-    payload: { uid: account.uid || config.uid, accountId, passwordForLs: encoded.password, overwrite: true },
+    payload: { uid: account.uid || config.uid, accountId, passwordForLs: websitePassword, overwrite: true },
   });
   await advanceFlow('waiting-for-password', { accountId });
   await emit({ type: 'ACCOUNT_SELECTED', source: 'popup', siteId: requireActiveSite().id, accountId, flowId: flow.flowId });
@@ -739,29 +753,22 @@ async function handleAuthenticate(): Promise<void> {
   showSuccess('Website fields filled', `${describeFilled(response)} filled. Continue on the website; UpSPA will remember this account for the next login step.`);
 }
 
-async function prepareRegistration(kind: 'website-signup' | 'import-existing-account'): Promise<void> {
+async function prepareRegistration(): Promise<void> {
   const site = requirePasswordCapableSite();
   const accountId = selectedAccountId();
   const masterPassword = settingsMasterPasswordEl.value || transientMasterPassword;
   if (!accountId) throw new Error('Enter the website account ID.');
   if (!masterPassword) throw new Error('Enter your master password.');
-  if (kind === 'import-existing-account' && activePageKind !== 'password-change') {
-    throw new Error('Open the website password-change page before preparing an existing-account enrollment.');
-  }
-  const currentWebsitePassword = existingWebsitePasswordEl.value;
-  if (kind === 'import-existing-account' && !currentWebsitePassword) {
-    throw new Error('Enter the current website password so UpSPA can encrypt it temporarily and fill the change form.');
-  }
   await emit({
-    type: kind === 'website-signup' ? 'USER_REQUESTED_SITE_SIGNUP' : 'USER_REQUESTED_ADD_EXISTING_ACCOUNT',
+    type: 'USER_REQUESTED_SITE_SIGNUP',
     source: 'popup',
     siteId: site.id,
   });
   const prepared = await prepareRegistrationForSite(makeLsj(activeCredentialOrigin, accountId), masterPassword);
   await unlockWithMasterPassword(masterPassword);
-  const flow = currentFlow?.kind === kind
+  const flow = currentFlow?.kind === 'website-signup'
     ? await advanceFlow('preparing', { accountId })
-    : await saveFlow(kind, 'preparing', accountId);
+    : await saveFlow('website-signup', 'preparing', accountId);
   const policy = readPolicy();
   const suid = primarySuid(prepared.records);
   const pending = createPendingRegistrationSession({
@@ -788,42 +795,28 @@ async function prepareRegistration(kind: 'website-signup' | 'import-existing-acc
   candidatePasswordEl.value = encoded.password;
   candidateFieldEl.classList.remove('hidden');
 
-  await saveCredentialContinuation(
-    kind === 'website-signup'
-      ? {
-          kind: 'registration',
-          accountId,
-          uid: pending.uid,
-          passwordForLs: encoded.password,
-          flowId: pending.flowId,
-          origin: activeOrigin,
-          confirmationNonce: pending.confirmationNonce,
-        }
-      : {
-          kind: 'import-existing-account',
-          oldPasswordForLs: currentWebsitePassword,
-          newPasswordForLs: encoded.password,
-        },
-    flow.flowId,
-  );
+  await saveCredentialContinuation({
+    kind: 'registration',
+    accountId,
+    uid: pending.uid,
+    passwordForLs: encoded.password,
+    flowId: pending.flowId,
+    origin: activeOrigin,
+    confirmationNonce: pending.confirmationNonce,
+  }, flow.flowId);
 
-  const response = kind === 'website-signup'
-    ? await fillOrThrow({
-        type: 'UPSPA_FILL_REGISTER',
-        payload: {
-          uid: pending.uid,
-          accountId,
-          passwordForLs: encoded.password,
-          flowId: pending.flowId,
-          origin: pending.origin,
-          confirmationNonce: pending.confirmationNonce,
-          overwrite: true,
-        },
-      })
-    : await fillOrThrow({
-        type: 'UPSPA_FILL_PASSWORD_CHANGE',
-        payload: { oldPasswordForLs: currentWebsitePassword, newPasswordForLs: encoded.password, overwrite: true },
-      });
+  const response = await fillOrThrow({
+    type: 'UPSPA_FILL_REGISTER',
+    payload: {
+      uid: pending.uid,
+      accountId,
+      passwordForLs: encoded.password,
+      flowId: pending.flowId,
+      origin: pending.origin,
+      confirmationNonce: pending.confirmationNonce,
+      overwrite: true,
+    },
+  });
 
   const pendingWithSecrets: PendingRegistration = {
     ...pending,
@@ -843,8 +836,61 @@ async function prepareRegistration(kind: 'website-signup' | 'import-existing-acc
   await markSessionUsed();
   settingsMasterPasswordEl.value = '';
   existingWebsitePasswordEl.value = '';
-  showWaiting(kind);
+  showWaiting();
   setStatus(`${describeFilled(response)} filled. Submit the website form manually, then confirm the website result here.`);
+}
+
+async function importExistingAccount(): Promise<void> {
+  const site = requirePasswordCapableSite();
+  const accountId = selectedAccountId();
+  const masterPassword = settingsMasterPasswordEl.value || transientMasterPassword;
+  const websitePassword = existingWebsitePasswordEl.value;
+  if (!accountId) throw new Error('Enter the existing website account ID.');
+  if (!masterPassword) throw new Error('Enter your master password.');
+  if (!websitePassword) throw new Error('Enter the existing website password.');
+  // Remove the website password from the form before any asynchronous work.
+  // It remains only in this call and in the encrypted Cj created below.
+  existingWebsitePasswordEl.value = '';
+  if (await getAccountForOrigin(activeCredentialOrigin, accountId)) {
+    throw new Error('This account is already saved. Use Update Saved Per-Site Secret instead.');
+  }
+  await emit({ type: 'USER_REQUESTED_ADD_EXISTING_ACCOUNT', source: 'popup', siteId: site.id });
+  const prepared = await prepareMigrationForSite(
+    makeLsj(activeCredentialOrigin, accountId),
+    masterPassword,
+    websitePassword,
+  );
+  await unlockWithMasterPassword(masterPassword);
+  const flow = currentFlow?.kind === 'import-existing-account'
+    ? await advanceFlow('committing', { accountId })
+    : await saveFlow('import-existing-account', 'committing', accountId);
+  await commitMigrationForSite(prepared);
+  const suid = primarySuid(prepared.records);
+  await upsertAccountForOrigin(activeCredentialOrigin, {
+    accountId,
+    version: 1,
+    credentialMode: 'embedded-password',
+    origin: activeCredentialOrigin,
+    websiteURL: activeWebsiteUrl || activeOrigin,
+    uid: prepared.uid,
+    suid,
+    username: accountId.includes('@') ? undefined : accountId,
+    email: accountId.includes('@') ? accountId : undefined,
+    createdAt: Math.floor(Date.now() / 1000),
+    storageProviderSuids: prepared.records.map((record) => ({ sp_id: record.sp_id, suid: record.suid })),
+  });
+  await clearPendingRegistrationSession(flow.flowId);
+  await clearCredentialContinuation(flow.flowId);
+  await emit({ type: 'USER_CONFIRMED_EXISTING_ACCOUNT_IMPORTED', source: 'popup', flowId: flow.flowId });
+  await clearFlowSession(flow.flowId);
+  currentFlow = undefined;
+  await markSessionUsed();
+  settingsMasterPasswordEl.value = '';
+  await loadAccounts(accountId);
+  showSuccess(
+    'Existing account imported',
+    `The existing ${activeSite?.label ?? 'website'} password is protected inside Cj. UpSPA did not open or change the website.`,
+  );
 }
 
 async function confirmRegistration(): Promise<void> {
@@ -864,6 +910,7 @@ async function confirmRegistration(): Promise<void> {
   await upsertAccountForOrigin(pending.origin, {
     accountId,
     version: 1,
+    credentialMode: 'derived',
     origin: pending.origin,
     websiteURL: pending.websiteURL,
     uid: pending.uid,
@@ -880,14 +927,14 @@ async function confirmRegistration(): Promise<void> {
   await clearPendingRegistrationSession(pending.flowId);
   await clearCredentialContinuation(pending.flowId);
   await emit({ type: 'USER_CONFIRMED_ACCOUNT_CREATED', source: 'popup', flowId: pending.flowId });
-  const imported = currentFlow.kind === 'import-existing-account';
   await clearFlowSession(pending.flowId);
   currentFlow = undefined;
   confirmationMasterPasswordEl.value = '';
   await loadAccounts(accountId);
-  showSuccess(imported ? 'Existing account added' : 'Website account saved', imported
-    ? `The existing ${activeSite?.label ?? 'website'} account was added to this local study profile.`
-    : `Your ${activeSite?.label ?? 'website'} account was saved to this local study profile.`);
+  showSuccess(
+    'Website account saved',
+    `Your ${activeSite?.label ?? 'website'} account was saved to this local study profile.`,
+  );
 }
 
 async function prepareWebsitePasswordUpdate(): Promise<void> {
@@ -895,36 +942,26 @@ async function prepareWebsitePasswordUpdate(): Promise<void> {
   const accountId = selectedAccountId();
   const account = await getAccountForOrigin(activeCredentialOrigin, accountId);
   const masterPassword = settingsMasterPasswordEl.value || transientMasterPassword;
-  if (!account || !account.passwordPolicy || account.encoderCounter === undefined) {
-    throw new Error('Choose an enrolled website account before refreshing its saved record.');
+  if (!account) {
+    throw new Error('Choose an enrolled website account before updating its saved per-site secret.');
   }
   if (!masterPassword) throw new Error('Enter your master password.');
   const currentWebsitePassword = existingWebsitePasswordEl.value;
   if (!currentWebsitePassword) throw new Error('Enter the current website password.');
+  existingWebsitePasswordEl.value = '';
   await emit({ type: 'USER_REQUESTED_WEBSITE_RECORD_REFRESH', source: 'popup', siteId: site.id, accountId });
-  const prepared = await prepareSecretUpdateForSite(makeLsj(activeCredentialOrigin, accountId), masterPassword, account.uid);
+  const prepared = await prepareSecretUpdateForSite(
+    makeLsj(activeCredentialOrigin, accountId),
+    masterPassword,
+    currentWebsitePassword,
+    account.uid,
+  );
   await unlockWithMasterPassword(masterPassword);
-  const oldEncoded = await encodeForAccount({
-    secretForLs: prepared.oldForLs,
-    policy: account.passwordPolicy,
-    accountId,
-    counter: account.passwordCounter ?? account.encoderCounter,
-    origin: activeCredentialOrigin,
-    uid: account.uid || prepared.uid,
-    suid: account.suid || account.storageProviderSuids?.[0]?.suid || '',
-    metadata: account.passwordMetadata,
-  });
-  if (currentWebsitePassword !== oldEncoded.password) {
-    throw new Error('The current website password does not match the saved UpSPA account. Nothing was changed.');
-  }
-  if (prepared.newForLs !== prepared.oldForLs) {
-    throw new Error('The prepared Cj update would rotate the website secret. Nothing was changed. Rebuild the extension before retrying.');
-  }
   const flow = currentFlow?.kind === 'website-password-update'
     ? await advanceFlow('preparing', { accountId })
     : await saveFlow('website-password-update', 'preparing', accountId);
   await commitSecretUpdateForSite({ uid: prepared.uid, cjNew: prepared.cjNew, suids: prepared.suids });
-  await upsertAccountForOrigin(activeCredentialOrigin, account);
+  await upsertAccountForOrigin(activeCredentialOrigin, { ...account, credentialMode: 'embedded-password' });
   await clearPendingSecretUpdateSession();
   await clearCredentialContinuation(flow.flowId);
   await emit({ type: 'USER_CONFIRMED_WEBSITE_RECORD_REFRESHED', source: 'popup', flowId: flow.flowId });
@@ -935,23 +972,13 @@ async function prepareWebsitePasswordUpdate(): Promise<void> {
   existingWebsitePasswordEl.value = '';
   await loadAccounts(accountId);
   showSuccess(
-    'Saved website record refreshed',
-    `UpSPA updated the encrypted Cj record for ${activeSite?.label ?? 'this website'} in extension storage. The website password was not changed.`,
+    'Encrypted Cj replaced',
+    `UpSPA rebuilt the encrypted Cj for ${activeSite?.label ?? 'this website'} with the entered current website password. No website interaction occurred.`,
   );
 }
 
 async function resumePendingFill(): Promise<void> {
   if (!currentFlow) throw new Error('No active flow is available to resume.');
-  if (currentFlow.kind === 'import-existing-account') {
-    await clearPendingRegistrationSession(currentFlow.flowId);
-    await clearCredentialContinuation(currentFlow.flowId);
-    await advanceFlow('password-settings');
-    showSettings('import-existing-account');
-    setStatus(transientMasterPassword
-      ? 'Enter the current website password again; the extension session remains unlocked.'
-      : 'Enter the current website password and master password to prepare this password-change step.');
-    return;
-  }
   if (currentFlow.kind !== 'website-signup') throw new Error('This flow cannot refill a website form.');
   const masterPassword = confirmationMasterPasswordEl.value || transientMasterPassword;
   if (!masterPassword) throw new Error('Enter the master password to unlock the prepared registration.');
@@ -991,13 +1018,6 @@ async function handleDetailsContinue(): Promise<void> {
   const kind = currentFlow?.kind;
   const accountId = siteAccountIdEl.value.trim();
   if (!accountId) throw new Error('Enter the website account ID.');
-  if (kind === 'import-existing-account' && activePageKind !== 'password-change') {
-    await advanceFlow('awaiting-password-page', { accountId });
-    const site = requireActiveSite();
-    if (activeTabId !== undefined) await chrome.tabs.update(activeTabId, { url: site.loginUrl });
-    setStatus('Sign in to the existing website account manually, then open its password-change page and reopen UpSPA.');
-    return;
-  }
   if (kind !== 'website-signup' && kind !== 'import-existing-account') throw new Error('Start a website account flow first.');
   if (kind === 'website-signup') {
     const response = await fillOrThrow({
@@ -1009,10 +1029,6 @@ async function handleDetailsContinue(): Promise<void> {
     setStatus(`${describeFilled(response)} filled. If this is a two-stage form, click the website Continue button before preparing the password.`);
     return;
   }
-  const masterPassword = siteDetailsMasterPasswordEl.value || transientMasterPassword;
-  if (!masterPassword) throw new Error('Enter your master password.');
-  transientMasterPassword = masterPassword;
-  siteDetailsMasterPasswordEl.value = '';
   await advanceFlow('password-settings', { accountId });
   showSettings(kind);
 }
@@ -1084,7 +1100,7 @@ async function commitMasterPasswordUpdate(): Promise<void> {
 }
 
 async function cancelCurrentFlow(): Promise<void> {
-  if (currentFlow?.kind === 'website-signup' || currentFlow?.kind === 'import-existing-account') {
+  if (currentFlow?.kind === 'website-signup') {
     await clearPendingRegistrationSession(currentFlow.flowId);
   }
   if (currentFlow?.kind === 'website-password-update') {
@@ -1168,17 +1184,18 @@ async function restoreOrRoute(): Promise<void> {
       : 'Verify your current master password again to continue this update.');
     return;
   }
-  if (restored.kind === 'website-signup' || restored.kind === 'import-existing-account') {
+  if (restored.kind === 'website-signup') {
     const pending = await loadPendingRegistrationSession(activeCredentialOrigin);
     if (pending?.flowId === restored.flowId) {
-      showWaiting(restored.kind);
+      showWaiting();
       return;
     }
-    if (restored.kind === 'import-existing-account' && activePageKind === 'password-change' && restored.accountId) {
-      showSettings('import-existing-account');
-      return;
-    }
-    showDetails(restored.kind);
+    showDetails('website-signup');
+    return;
+  }
+  if (restored.kind === 'import-existing-account') {
+    if (restored.accountId) showSettings('import-existing-account');
+    else showDetails('import-existing-account');
     return;
   }
   if (restored.kind === 'website-password-update') {
@@ -1295,7 +1312,7 @@ byId<HTMLButtonElement>('dashboardUpdateWebsitePassword').addEventListener('clic
     await saveFlow('website-password-update', 'account-picker');
     showAccountPicker('website-password-update');
   } else if (siteAccounts[0]) {
-    await openPasswordChangeForAccount(siteAccounts[0].accountId);
+    await openSecretUpdateForAccount(siteAccounts[0].accountId);
   }
 }));
 byId<HTMLButtonElement>('dashboardAddAccount').addEventListener('click', () => showScreen('add-account-choice'));
@@ -1316,14 +1333,17 @@ pickerContinueButton.addEventListener('click', () => void run(async () => {
   if (pickerMode === 'sign-in') {
     await openLoginForAccount(accountId);
   } else if (pickerMode === 'website-password-update') {
-    await openPasswordChangeForAccount(accountId);
+    await openSecretUpdateForAccount(accountId);
   } else {
     renderDashboard();
   }
 }));
 
-byId<HTMLButtonElement>('createNewAccount').addEventListener('click', () => void run(async () => {
+createNewAccountButton.addEventListener('click', () => void run(async () => {
   const site = requireActiveSite();
+  if (site.registrationSupported === false) {
+    throw new Error(`${site.label} does not support website registration. Import an existing account instead.`);
+  }
   await emit({ type: 'USER_REQUESTED_SITE_SIGNUP', source: 'popup', siteId: site.id });
   await saveFlow('website-signup', 'details');
   if (activeTabId !== undefined) await chrome.tabs.update(activeTabId, { url: site.signupUrl });
@@ -1342,7 +1362,8 @@ byId<HTMLButtonElement>('authenticate').addEventListener('click', () => void run
 byId<HTMLButtonElement>('masterAuthAddAccount').addEventListener('click', () => showScreen('add-account-choice'));
 settingsSubmitButton.addEventListener('click', () => void run(async () => {
   if (currentFlow?.kind === 'website-password-update') await prepareWebsitePasswordUpdate();
-  else if (currentFlow?.kind === 'website-signup' || currentFlow?.kind === 'import-existing-account') await prepareRegistration(currentFlow.kind);
+  else if (currentFlow?.kind === 'import-existing-account') await importExistingAccount();
+  else if (currentFlow?.kind === 'website-signup') await prepareRegistration();
   else throw new Error('Start a website account or password-update flow first.');
 }));
 generateCandidateButton.addEventListener('click', () => {
@@ -1352,7 +1373,7 @@ generateCandidateButton.addEventListener('click', () => {
 });
 byId<HTMLButtonElement>('settingsCancel').addEventListener('click', () => void run(cancelCurrentFlow));
 confirmOperationButton.addEventListener('click', () => void run(async () => {
-  if (currentFlow?.kind === 'website-signup' || currentFlow?.kind === 'import-existing-account') await confirmRegistration();
+  if (currentFlow?.kind === 'website-signup') await confirmRegistration();
   else throw new Error('No operation is waiting for confirmation.');
 }));
 resumePendingFillButton.addEventListener('click', () => void run(resumePendingFill));
