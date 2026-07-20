@@ -30,7 +30,7 @@ describe('popup and side-panel layout', () => {
     const end = source.indexOf('async function resumePendingFill', start);
     const updateFlow = source.slice(start, end);
     expect(html).toContain('Current website password');
-    expect(html).toContain('Update Saved Per-Site Secret');
+    expect(html).toContain('Update saved password');
     expect(updateFlow).toContain('prepareSecretUpdateForSite(');
     expect(updateFlow).toContain('currentWebsitePassword,');
     expect(updateFlow).toContain('commitSecretUpdateForSite');
@@ -71,5 +71,40 @@ describe('popup and side-panel layout', () => {
     expect(source).toContain("activeSite?.registrationSupported !== false");
     expect(source).toContain("site.registrationSupported === false");
     expect(source).toContain('Import an existing password locally instead.');
+  });
+
+  it('keeps cancel available while other actions are busy', () => {
+    for (const id of [
+      'pickerCancel',
+      'masterAuthCancel',
+      'detailsCancel',
+      'settingsCancel',
+      'cancelOperation',
+      'masterUpdateCancel',
+      'masterNewCancel',
+      'masterChecklistCancel',
+    ]) {
+      expect(html).toMatch(new RegExp(`<button id="${id}"[^>]*data-cancel-action="true"`));
+      expect(source).toContain(`('${id}').addEventListener('click', () => void requestCancellation())`);
+    }
+    expect(source).toContain("button.disabled = button.dataset.cancelAction !== 'true'");
+    expect(source).toContain('operationVersion += 1');
+  });
+
+  it('returns cancellation to the dashboard without recreating a page-driven flow', () => {
+    const start = source.indexOf('async function cancelCurrentFlow');
+    const end = source.indexOf('async function requestCancellation', start);
+    const cancelFlow = source.slice(start, end);
+    expect(cancelFlow).toContain('currentFlow = undefined');
+    expect(cancelFlow).toContain('renderDashboard()');
+    expect(cancelFlow).not.toContain('routeFromPage()');
+    expect(cancelFlow).toContain("setStatus('Process cancelled.')");
+  });
+
+  it('uses participant-facing copy instead of protocol terminology', () => {
+    expect(html).not.toMatch(/Storage Provider|prototype registry|encrypted Cj/i);
+    expect(source).not.toContain('Update Saved Per-Site Secret');
+    expect(source).not.toContain('Replace encrypted Cj locally');
+    expect(source).not.toContain('Update selected Cj');
   });
 });

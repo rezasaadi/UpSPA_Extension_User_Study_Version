@@ -75,7 +75,7 @@ function goBackToSite(): void {
 
 async function completeSetup(): Promise<void> {
   if (!controller.uid || !controller.masterPassword) throw new Error('Return to the first setup stage and enter the master password again.');
-  setStatus('Creating your UpSPA account and provisioning the local Storage Provider...');
+  setStatus('Creating your UpSPA account...');
   await setupAndProvision({
     uid: controller.uid,
     password: controller.masterPassword,
@@ -90,7 +90,7 @@ async function completeSetup(): Promise<void> {
   passwordEl.value = '';
   passwordConfirmEl.value = '';
   showStage('success');
-  setStatus('Setup complete. The local Storage Provider was provisioned automatically.');
+  setStatus('Your UpSPA account is ready.');
 }
 
 byId<HTMLButtonElement>('setupContinue').addEventListener('click', () => {
@@ -126,8 +126,8 @@ async function initialize(): Promise<void> {
     setStatus('UpSPA setup is already complete. Master-password changes are available from the extension dashboard.');
   } else {
     showStage('master');
-    setStatus('Ready to create a local prototype UpSPA account.');
+    setStatus('Ready to create your UpSPA account.');
   }
 }
 
-initialize().catch((error) => setStatus(error instanceof Error ? error.message : String(error), 'error'));
+initialize().catch(() => setStatus('Open setup from the UpSPA extension and try again.', 'error'));

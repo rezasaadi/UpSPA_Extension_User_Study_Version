@@ -22,7 +22,7 @@
         </header>
         <div class="checklist-card">
           <span class="checkmark" aria-hidden="true"></span>
-          <p>Setup creates one local Storage Provider automatically for this prototype.</p>
+          <p>Your saved accounts stay in this browser profile.</p>
         </div>
         <button id="openSetup" class="primary-button" type="button">Continue setup</button>
       </section>
@@ -30,7 +30,7 @@
       <section id="screen-unsupported" class="screen hidden">
         <header class="auth-header">
           <h2>Website not supported</h2>
-          <p id="unsupportedMessage">This page is not in the UpSPA prototype registry.</p>
+          <p id="unsupportedMessage">UpSPA is not available on this page yet.</p>
         </header>
       </section>
 
@@ -51,7 +51,7 @@
         </header>
         <div id="dashboardAccounts" class="saved-list scroll-list" aria-label="Saved accounts"></div>
         <button id="dashboardSignIn" class="primary-button" type="button">Sign in with saved account</button>
-        <button id="dashboardUpdateWebsitePassword" class="secondary-button" type="button">Update Saved Per-Site Secret</button>
+        <button id="dashboardUpdateWebsitePassword" class="secondary-button" type="button">Update saved password</button>
         <button id="dashboardAddAccount" class="secondary-button" type="button">Add another account</button>
         <button id="dashboardMasterPassword" class="text-button" type="button">Update Master Password</button>
       </section>
@@ -68,6 +68,7 @@
         <button id="pickerContinue" class="primary-button narrow-content" type="button">Continue</button>
         <button id="pickerAddAccount" class="secondary-button narrow-content" type="button">Add another account</button>
         <button id="pickerMasterPassword" class="text-button narrow-content" type="button">Update Master Password</button>
+        <button id="pickerCancel" class="text-button narrow-content" type="button" data-cancel-action="true">Back to accounts</button>
       </section>
 
       <section id="screen-add-account-choice" class="screen hidden">
@@ -77,7 +78,7 @@
         </header>
         <button id="createNewAccount" class="primary-button" type="button">Create a new account</button>
         <button id="addExistingAccount" class="secondary-button" type="button">Add an existing account</button>
-        <button id="choiceBack" class="text-button" type="button">Back to accounts</button>
+        <button id="choiceBack" class="text-button" type="button" data-cancel-action="true">Back to accounts</button>
       </section>
 
       <section id="screen-master-auth" class="screen hidden">
@@ -92,6 +93,7 @@
         <label id="masterAuthPasswordField" class="field">Master password<div class="input-box"><input id="masterAuthPassword" type="password" autocomplete="current-password" /></div></label>
         <button id="authenticate" class="primary-button" type="button">Sign in</button>
         <button id="masterAuthAddAccount" class="text-button" type="button">Add another account</button>
+        <button id="masterAuthCancel" class="text-button" type="button" data-cancel-action="true">Cancel</button>
       </section>
 
       <section id="screen-site-account-details" class="screen hidden">
@@ -103,7 +105,7 @@
         <label class="field">E-mail or account ID<div class="input-box"><input id="siteAccountId" autocomplete="username" /></div></label>
         <label id="detailsMasterField" class="field">Master password<div class="input-box"><input id="siteDetailsMasterPassword" type="password" autocomplete="current-password" /></div></label>
         <button id="detailsContinue" class="primary-button" type="button">Continue</button>
-        <button id="detailsCancel" class="text-button" type="button">Cancel</button>
+        <button id="detailsCancel" class="text-button" type="button" data-cancel-action="true">Cancel</button>
       </section>
 
       <section id="screen-site-password-settings" class="screen hidden">
@@ -112,15 +114,15 @@
           <p id="settingsDescription"></p>
         </header>
         <div id="policyCard" class="policy-card">
-          <div class="policy-grid">
+          <div class="policy-grid hidden" aria-hidden="true">
             <label>Min<input id="policyMinLen" type="number" min="1" /></label>
             <label>Max<input id="policyMaxLen" type="number" min="1" /></label>
           </div>
-          <label class="check"><input id="policyUpper" type="checkbox" />Uppercase</label>
-          <label class="check"><input id="policyLower" type="checkbox" />Lowercase</label>
-          <label class="check"><input id="policyDigit" type="checkbox" />Digit</label>
-          <label class="check"><input id="policySymbol" type="checkbox" />Symbol</label>
-          <label class="check"><input id="policyWhitespace" type="checkbox" />Forbid whitespace</label>
+          <label class="check hidden" aria-hidden="true"><input id="policyUpper" type="checkbox" />Uppercase</label>
+          <label class="check hidden" aria-hidden="true"><input id="policyLower" type="checkbox" />Lowercase</label>
+          <label class="check hidden" aria-hidden="true"><input id="policyDigit" type="checkbox" />Digit</label>
+          <label class="check hidden" aria-hidden="true"><input id="policySymbol" type="checkbox" />Symbol</label>
+          <label class="check hidden" aria-hidden="true"><input id="policyWhitespace" type="checkbox" />Forbid whitespace</label>
           <label class="hidden">Allowed symbols<input id="policySymbols" /></label>
           <label class="hidden">Forbidden strings<input id="policyForbidden" /></label>
           <p id="policyEvidence" class="small"></p>
@@ -128,9 +130,9 @@
         <label id="settingsMasterField" class="field">Master password<div class="input-box"><input id="settingsMasterPassword" type="password" autocomplete="current-password" /></div></label>
         <label id="existingPasswordField" class="field hidden">Current website password<div class="input-box"><input id="existingWebsitePassword" type="password" autocomplete="current-password" /></div></label>
         <label id="candidateField" class="field hidden">Generated website password<div class="input-box"><input id="candidatePassword" type="password" readonly /></div></label>
-        <button id="settingsSubmit" class="primary-button" type="button">Prepare and fill</button>
-        <button id="generateCandidate" class="secondary-button" type="button">Generate another password</button>
-        <button id="settingsCancel" class="text-button" type="button">Cancel</button>
+        <button id="settingsSubmit" class="primary-button" type="button">Continue</button>
+        <button id="generateCandidate" class="secondary-button" type="button">Use a different password</button>
+        <button id="settingsCancel" class="text-button" type="button" data-cancel-action="true">Cancel</button>
       </section>
 
       <section id="screen-waiting-confirmation" class="screen hidden">
@@ -142,7 +144,7 @@
         <label id="confirmationMasterField" class="field">Master password<div class="input-box"><input id="confirmationMasterPassword" type="password" autocomplete="current-password" /></div></label>
         <button id="confirmOperation" class="primary-button" type="button">Confirm</button>
         <button id="resumePendingFill" class="secondary-button hidden" type="button">Fill website form again</button>
-        <button id="cancelOperation" class="text-button" type="button">Cancel</button>
+        <button id="cancelOperation" class="text-button" type="button" data-cancel-action="true">Cancel</button>
       </section>
 
       <section id="screen-operation-success" class="screen hidden">
@@ -161,7 +163,7 @@
         </header>
         <label id="masterCurrentPasswordField" class="field">Current master password<div class="input-box"><input id="masterCurrentPassword" type="password" autocomplete="current-password" /></div></label>
         <button id="verifyMasterPassword" class="primary-button" type="button">Verify</button>
-        <button id="masterUpdateCancel" class="text-button" type="button">Cancel</button>
+        <button id="masterUpdateCancel" class="text-button" type="button" data-cancel-action="true">Cancel</button>
       </section>
 
       <section id="screen-master-password-new" class="screen hidden">
@@ -172,6 +174,7 @@
         <label class="field">New master password<div class="input-box"><input id="masterNewPassword" type="password" autocomplete="new-password" /></div></label>
         <label class="field">Confirm new master password<div class="input-box"><input id="masterNewPasswordConfirm" type="password" autocomplete="new-password" /></div></label>
         <button id="masterNewContinue" class="primary-button" type="button">Continue</button>
+        <button id="masterNewCancel" class="text-button" type="button" data-cancel-action="true">Cancel</button>
       </section>
 
       <section id="screen-master-password-checklist" class="screen hidden">
@@ -186,6 +189,7 @@
         </div>
         <button id="masterUpdateCommit" class="primary-button" type="button">Update Master Password</button>
         <button id="masterChecklistBack" class="text-button" type="button">Revise password</button>
+        <button id="masterChecklistCancel" class="text-button" type="button" data-cancel-action="true">Cancel</button>
       </section>
 
       <section id="screen-master-password-success" class="screen hidden">

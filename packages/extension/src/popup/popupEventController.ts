@@ -30,7 +30,7 @@ async function runOperation(
       source: 'popup',
       operation,
       accountId,
-      error: `No handler registered for ${operation}.`,
+      error: 'This action is not available right now.',
     }));
     return;
   }
@@ -62,7 +62,7 @@ export function createPopupEventController(deps: PopupEventControllerDeps): Popu
 
   bus.on('OPERATION_STARTED', (event) => {
     deps.setBusy(true);
-    deps.setStatus(`Running ${event.operation}...`);
+    deps.setStatus('Working...');
   });
 
   bus.on('OPERATION_SUCCESS', (event) => {
@@ -76,7 +76,7 @@ export function createPopupEventController(deps: PopupEventControllerDeps): Popu
   });
 
   bus.on('POLICY_LOADED', (event) => {
-    deps.setStatus(`Loaded prototype policy for ${event.label}.`);
+    deps.setStatus(`Password settings ready for ${event.label}.`);
   });
 
   bus.on('SCREEN_CHANGED', (event) => {
