@@ -11,11 +11,11 @@ This list is an inventory, not a compatibility guarantee. The executable source 
 | `apple` | Apple Account / iCloud | hard |
 | `facebook` | Facebook | hard |
 | `instagram` | Instagram | hard |
-| `x` | X / Twitter | hard |
+| `overleaf` | Overleaf | easy |
 | `linkedin` | LinkedIn | medium |
 | `github` | GitHub | medium |
-| `gitlab` | GitLab | medium |
-| `bitbucket` | Bitbucket / Atlassian | medium |
+| `n11` | n11 | medium |
+| `biletinial` | Biletinial | easy |
 | `stackoverflow` | Stack Overflow | medium |
 | `reddit` | Reddit | medium |
 | `discord` | Discord | medium |
@@ -31,14 +31,14 @@ This list is an inventory, not a compatibility guarantee. The executable source 
 | `netflix` | Netflix | medium |
 | `amazon` | Amazon | hard |
 | `ebay` | eBay | medium |
-| `paypal` | PayPal | hard |
+| `dr` | D&R | easy |
 | `tiktok` | TikTok | hard |
 | `twitch` | Twitch | medium |
 | `pinterest` | Pinterest | medium |
 | `yahoo` | Yahoo Mail | hard |
 | `proton` | Proton Mail | medium |
 | `wordpress` | WordPress.com | easy |
-| `medium` | Medium | medium |
+| `edevlet` | Turkey e-Devlet | hard (detection-only) |
 | `quora` | Quora | medium |
 | `steam` | Steam | medium |
 | `epicgames` | Epic Games | medium |
@@ -65,7 +65,9 @@ Most sites use `relaxed20Policy`:
 - symbols disabled by default;
 - whitespace forbidden.
 
-The conservative policy reduces cross-site symbol/max-length failures during a usability study. Google, Apple, and GitHub have explicit overrides. Policy sources are labeled `official`, `signup-page-observed`, or `conservative-prototype` in code.
+The conservative policy reduces cross-site symbol/max-length failures during a usability study. Google, Apple, GitHub, D&R, and n11 have explicit overrides. Policy sources are labeled `official`, `signup-page-observed`, or `conservative-prototype` in code.
+
+Turkey e-Devlet is explicitly `registrationSupported: false` and `studyRisk: high-risk-detection-only`. Its adapter recognizes the official T.C. Kimlik No and e-Devlet Şifresi fields while excluding CAPTCHA and hidden encrypted transport fields. It has no browser sign-up flow, and real government credentials must never be used in a study run.
 
 Registry policy notes must be reviewed before each study wave because a website can change its requirements without notice.
 

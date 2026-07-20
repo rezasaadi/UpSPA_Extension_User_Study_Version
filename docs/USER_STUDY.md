@@ -11,8 +11,8 @@ The build is suitable for evaluating:
 - selecting among saved accounts;
 - creating or enrolling a website account;
 - signing in on one- and multi-step forms;
-- understanding explicit confirmation before UpSPA commits changes;
-- differentiating website-password update from master-password update;
+- understanding explicit confirmation before UpSPA commits a registration;
+- differentiating a saved website-record refresh from a website-password or master-password change;
 - recovery from rejected, cancelled, expired, or interrupted flows.
 
 It is not suitable for evaluating production security, distributed compromise tolerance, cross-browser compatibility, or long-term reliability on arbitrary websites.
@@ -66,7 +66,7 @@ For every site included in the session:
 3. Check for CAPTCHA, phone verification, rate limits, regional redirects, and consent dialogs.
 4. Confirm the content script loads on every hostname/frame used by the task.
 5. Confirm the route classifier selects the intended flow.
-6. Confirm identifier/current/new/confirmation fields are filled correctly.
+6. For registration, confirm identifier/new/confirmation fields are filled correctly. For existing-account import and per-site secret update, confirm no website field is changed.
 7. Confirm no form is automatically submitted.
 8. Test cancel, reject, and expiry behavior if those paths are in scope.
 
@@ -86,6 +86,7 @@ Observe whether the participant understands:
 
 - the UID/account field;
 - that the master password is different from a website password;
+- that successful setup unlocks a sliding 30-minute session for registration, Cj refresh, and continuation steps, while every saved-account website sign-in still asks for the master password explicitly;
 - that the local SP is created automatically;
 - the checklist and success state.
 
@@ -125,18 +126,18 @@ Verify the participant can find **Add another account** and distinguish:
 - **Create a new account**; and
 - **Add an existing account**.
 
-For an existing account, use only a disposable credential. The current website password is encrypted temporarily to continue the flow and should be cleared after completion/cancellation/expiry.
+For an existing account, use only a disposable credential. The exact entered website password is encrypted directly in a new Cj and committed without opening or changing the website.
 
-### Task 5: Update Website Password
+### Task 5: Refresh Saved Website Record
 
 Expected path:
 
 ```text
-select site/account -> generate replacement -> fill old/new/confirm
--> participant submits -> Password changed or Website rejected it
+select site/account -> enter current website password
+-> rebuild and replace Cj locally with that exact password
 ```
 
-Verify that rejection keeps the old UpSPA record active and that only successful confirmation commits the prepared secret update.
+Verify that `Cj` changes and later authentication recovers the exact entered website password directly. No website page or confirmation step is involved. The extension deliberately does not contact the website, so it cannot distinguish a current password from a mistyped one.
 
 ### Task 6: Update Master Password
 
@@ -182,14 +183,17 @@ Verify saved website accounts remain listed and the old master password no longe
 - [ ] Selecting an account survives popup closure.
 - [ ] Identifier-first and password-second pages continue correctly.
 - [ ] A wrong master password does not reveal/fill a credential.
-- [ ] Lock clears the active session marker.
+- [ ] Saved-account website authentication explicitly asks for the master password each time.
+- [ ] A verified master password is reused for registration, Cj refresh, and continuation steps while the 30-minute session remains unlocked.
+- [ ] Lock clears both the active session marker and the in-memory master-password session.
 
-### Website password update
+### Saved website-record refresh
 
 - [ ] Correct account is selected.
-- [ ] Old/new/confirmation fields are distinguished.
-- [ ] **Website rejected it** does not commit.
-- [ ] **Password changed** commits and future authentication succeeds.
+- [ ] Current website password input is required and stored exactly inside the replacement Cj.
+- [ ] No attempt is made to verify the value against or send it to the website.
+- [ ] No new website password is generated or filled.
+- [ ] `Cj` changes locally while future authentication returns the exact entered website password.
 
 ### Master-password update
 
@@ -230,7 +234,8 @@ The extension includes no analytics or remote telemetry. It stores operational s
 - local SP setup and opaque records;
 - saved account/policy/counter metadata;
 - encrypted pending/continuation records;
-- short-lived session and page-context metadata.
+- short-lived session and page-context metadata;
+- the unlocked master password in extension-only `chrome.storage.session` for at most 30 sliding minutes (never local storage).
 
 The optional demo login server is an in-memory engineering fixture. It is not part of the participant path and should not be treated as a data-collection backend.
 
@@ -252,7 +257,7 @@ Task outcomes:
 - Registration:
 - Authentication:
 - Add another account:
-- Website password update:
+- Per-site secret update:
 - Master-password update:
 
 Observed route/field mismatch:
@@ -271,7 +276,7 @@ Stop the task/session if:
 
 - a real personal or valuable account is opened;
 - the extension targets the wrong origin/account;
-- current/new password fields cannot be distinguished reliably;
+- a migration or per-site secret update attempts to open, fill, or submit a website page;
 - the site would incur a purchase, financial action, policy violation, or irreversible change;
 - consent or data-capture scope is unclear;
 - the participant cannot safely recover from the current state.

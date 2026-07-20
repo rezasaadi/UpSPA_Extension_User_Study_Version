@@ -157,10 +157,13 @@ A record is indexed by:
 
 ### What the client does
 
-1) Generate per-LS secret(s), e.g. a random seed.
+1) Select the record mode:
+   - registration/legacy: generate a random 32-byte `RLSj`;
+   - migration/import: use the exact UTF-8 website password entered by the user.
 2) Derive encryption key(s) from `password_state_key`.
-3) Encrypt into a `cj` blob:
-   - `cj = XChaCha20-Poly1305(key, aad(suid), plaintext)`
+3) Encrypt into a `cj` blob with XChaCha20-Poly1305 and the authenticated `uid|ciphersp` domain:
+   - legacy registration plaintext: `RLSj || ctr` (40 bytes);
+   - Cj v2 migration plaintext: `"CJv2" || embedded-mode || ctr || password_len || password || randomized_padding` (1,039 bytes total, with a 1,024-byte password area).
 4) Store at an SP:
    - **POST `/v1/records`** with `{ suid_b64, cj }`
 
@@ -187,8 +190,10 @@ Read or update the per-LS secret.
 
 ### What the client does
 
-- Fetch `cj`, decrypt using keys derived from the recovered password-state key.
-- If updating, re-encrypt and PUT.
+- Fetch `cj` and decrypt it using `k0` recovered from `cid`.
+- Authentication chooses the valid record with the greatest counter. A legacy/registration record returns derived `vinfo_prime`; a Cj v2 record returns the exact embedded website password.
+- Per-site secret update reads the greatest counter, increments it, embeds the exact website password entered by the user in a new padded Cj v2, and PUTs that record. It does not generate a replacement password and does not interact with the website.
+- Storage Providers accept only the two authenticated ciphertext sizes: 40 bytes for legacy registration or 1,039 bytes for Cj v2; nonce and tag lengths remain 24 and 16 bytes.
 
 ---
 

@@ -6,7 +6,7 @@ This document describes the relaxed user-study implementation. It distinguishes 
 
 | Component | Responsibility | Must not do |
 |---|---|---|
-| Options page | First-run setup, checklist, local SP provisioning | Run website flows or persist plaintext master passwords |
+| Options page | First-run setup, checklist, local SP provisioning, initial session unlock | Run website flows or persist plaintext master passwords outside session memory |
 | Popup/side panel | Select and coordinate participant flows | Reimplement protocol algorithms |
 | Content script | Classify visible forms, fill fields, continue multi-step pages | Commit registrations/updates or submit forms |
 | Background worker | Bridge messages, page context, and continuation state | Keep security-critical state only in service-worker memory |
@@ -35,15 +35,15 @@ sps         = [{ id: 1, baseUrl: local://sp-1 }]
 | Create UpSPA account | `options.ts` → `setupAndProvision()` | Protocol setup/provision | Setup flag is written only after provisioning succeeds |
 | Sign in to website | `handleAuthenticate()` → `authenticateForSite()` | Authentication | No SP commit; fields are filled and participant submits |
 | Create website account | `prepareRegistration()` → `prepareRegistrationForSite()` | Registration preparation | `commitRegistrationForSite()` only after **Account created** |
-| Add existing account | Import flow reusing registration prepare/commit helpers | Enroll a credential after website password change | Explicit **Existing account updated** confirmation |
-| Update Website Password | `prepareSecretUpdateForSite()` | Protocol secret update | `commitSecretUpdateForSite()` only after **Password changed** |
+| Add existing account | `prepareMigrationForSite()` → `commitMigrationForSite()` | Encrypt the exact entered existing website password in Cj v2 | Commit locally/SP immediately; no website interaction |
+| Refresh Saved Website Record | `prepareSecretUpdateForSite()` | Replace Cj with a newer Cj v2 containing the exact entered current website password | Commit locally/SP immediately; no website interaction |
 | Update Master Password | `passwordUpdateDirect()` | Protocol password update | Applied after current-password verification, new-password check, and checklist |
 
-“Website password update” and “master-password update” are not interchangeable:
+“Per-site secret update” and “master-password update” are not interchangeable:
 
 ```text
-Update Website Password -> UpSPA secret update -> one site/account
-Update Master Password   -> UpSPA password update -> protects global client state
+Per-site secret update -> embed entered website password in new Cj -> one site/account
+Update Master Password -> UpSPA password update -> protects global client state
 ```
 
 ## Page-classification order
@@ -79,11 +79,11 @@ Popup documents are destroyed when closed, and Manifest V3 workers can be suspen
 | State | Storage | Lifetime | Sensitive material |
 |---|---|---:|---|
 | Active flow metadata | `chrome.storage.session`, local fallback | 30 min | No plaintext master/website password |
-| Page context | Session storage, local fallback | 10 sec | URL/form summary only |
+| Page context | Session storage, local fallback | 2 min, refreshed every 60 sec | URL/form summary only |
 | Credential continuation | Encrypted blob in local storage | 30 min | Derived/current website material, encrypted |
 | Pending registration | Encrypted blob in local storage | 30 min | Prepared LS/SP registration output, encrypted with master-password-derived key |
-| Pending secret update | Encrypted blob in local storage | 30 min | Prepared SP update material, encrypted with master-password-derived key |
 | Study session marker | Local storage | 30 min idle | Timestamp only |
+| Unlocked master password | `chrome.storage.session` only | 30 min sliding | Plaintext; extension contexts only; removed by Lock/expiry/browser shutdown |
 
 Flow metadata is bound where possible to `siteId`, `tabId`, `origin`, `flowId`, and expiry. Stale or cross-site state is rejected.
 
@@ -110,11 +110,10 @@ The small typed event bus coordinates UI/content state. Important intent events 
 - `USER_REQUESTED_SITE_SIGNUP`
 - `USER_REQUESTED_SITE_SIGNIN`
 - `USER_REQUESTED_ADD_EXISTING_ACCOUNT`
-- `USER_REQUESTED_WEBSITE_PASSWORD_UPDATE`
+- `USER_REQUESTED_WEBSITE_RECORD_REFRESH`
 - `USER_REQUESTED_MASTER_PASSWORD_UPDATE`
 - `USER_CONFIRMED_ACCOUNT_CREATED`
-- `USER_CONFIRMED_WEBSITE_PASSWORD_CHANGED`
-- `USER_REPORTED_WEBSITE_REJECTION`
+- `USER_CONFIRMED_WEBSITE_RECORD_REFRESHED`
 - `FLOW_RESTORED`
 - `FLOW_CANCELLED`
 
@@ -151,10 +150,12 @@ It is not provisioned by the normal study setup controller. Its purpose here is 
 ## Invariants for future changes
 
 - Do not rewrite protocol algorithms in TypeScript UI files.
-- Do not persist plaintext master passwords.
+- Do not persist plaintext master passwords outside `chrome.storage.session`; clear the unlocked value on Lock, expiry, and browser shutdown.
 - Do not auto-submit website forms.
 - Do not commit prepared registration before participant confirmation.
-- Do not commit prepared website password update before participant confirmation.
+- Registration keeps its generated `RLSj`/derived-password protocol; migration and per-site update must never use that encoder path.
+- Migration and per-site update must embed the exact entered website password in Cj v2 without opening, filling, or submitting a website form.
+- Authentication must return embedded website passwords directly, while legacy/registration records continue through the deterministic encoder.
 - Do not treat secret update as master-password update.
 - Do not overwrite another saved account for the same origin.
 - Do not broaden manifest access beyond the registry without an explicit study requirement.
