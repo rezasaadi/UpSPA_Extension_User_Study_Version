@@ -62,15 +62,17 @@ pub fn client_secret_update_finish<R: RngCore + CryptoRng>(
         return Err(UpspaError::Aead);
     }
     let vinfo_prime = hash_vinfo(&old_rlsj, lsj);
-    let mut new_rlsj = [0u8; 32];
-    rng.fill_bytes(&mut new_rlsj);
+    // Refresh Cj without rotating the website secret. The website password is
+    // derived from (RLSj, LSj), so preserving RLSj keeps the participant's
+    // existing website password valid while the encrypted SP record receives
+    // a fresh nonce and a monotonically newer counter.
     let new_ctr = old_ctr.wrapping_add(1);
     let mut pt = [0u8; CIPHERSP_PT_LEN];
-    pt[0..32].copy_from_slice(&new_rlsj);
+    pt[0..32].copy_from_slice(&old_rlsj);
     pt[32..40].copy_from_slice(&new_ctr.to_le_bytes());
     let aad = ciphersp_aad(uid);
     let cj_new = xchacha_encrypt_detached(k0, &aad, &pt, rng);
-    let vinfo_new = hash_vinfo(&new_rlsj, lsj);
+    let vinfo_new = vinfo_prime;
     Ok(SecretUpdateOutput {
         vinfo_prime,
         vinfo_new,

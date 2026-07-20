@@ -43,11 +43,13 @@ fn full_client_flow_smoke_test() {
     let su_res =
         secret_update::client_secret_update_finish(uid, lsj, &su_q.k0, &cjs, &mut rng).unwrap();
     assert_eq!(su_res.vinfo_prime, vinfo_reg);
+    assert_eq!(su_res.vinfo_new, vinfo_reg);
     assert_eq!(su_res.old_ctr, 0);
     assert_eq!(su_res.new_ctr, 1);
     let cjs_new = vec![su_res.cj_new.clone(); tsp];
     let auth_res2 = authenticate::client_auth_finish(uid, lsj, &auth_q.k0, &cjs_new).unwrap();
     assert_eq!(auth_res2.vinfo_prime, su_res.vinfo_new);
+    assert_eq!(auth_res2.vinfo_prime, vinfo_reg);
     let timestamp: u64 = 123456;
     let pw_res = password_update::client_password_update(
         uid,
