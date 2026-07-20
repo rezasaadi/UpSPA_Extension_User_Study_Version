@@ -11,29 +11,55 @@ jobs:
   extension:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4.4.0
+
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: pnpm
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+
       - name: Install wasm-pack
         run: cargo install wasm-pack --locked --version 0.15.0
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
       - name: Build and test the study extension
         run: pnpm verify
 
   storage-provider:
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
         with:
           go-version-file: services/storage-provider-go/go.mod
           cache-dependency-path: services/storage-provider-go/go.sum
+
       - name: Test the distributed reference service
-        run: go -C services/storage-provider-go test ./...
+        env:
+          DATABASE_URL: postgres://test:test@localhost:5432/test?sslmode=disable
+        run: go -C services/storage-provider-go test -v ./...
