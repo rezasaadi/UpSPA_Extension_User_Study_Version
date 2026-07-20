@@ -17,7 +17,9 @@ The study build keeps the real Rust/WASM protocol and extension flow, but defaul
 | Website scope | 40 curated study-site definitions |
 | Page selection | Hardcoded routes first; form detection as fallback |
 | Form submission | Never automatic; the participant submits |
-| Registration/update commit | Only after explicit participant confirmation |
+| Registration commit | Only after explicit participant confirmation |
+| Existing-account import | Immediate local Cj creation; no website interaction or replacement password |
+| Per-site secret update | Immediate local Cj replacement using the entered current website password |
 | Active-flow lifetime | 30 minutes |
 | Minimum master-password length | 6 characters (study relaxation) |
 | Distributed mode | Retained for regression/developer compatibility only |
@@ -35,7 +37,7 @@ The user-study version deliberately changes deployment and UX constraints while 
 - The master-password UI accepts six or more characters to reduce friction during a moderated study.
 - A conservative 16–20 character, mixed-case alphanumeric website policy is used for most sites; site-specific overrides are kept in the registry.
 - Content-script access is limited to hostnames in the curated registry.
-- The participant must confirm successful account creation or password change before UpSPA commits the prepared record.
+- The participant must confirm successful account creation before UpSPA commits a prepared registration. Import and per-site secret update are separate local-only operations that protect the password entered by the participant inside Cj.
 - The extension fills fields but does not submit real website forms.
 
 These are usability-study decisions, not security claims.
@@ -47,12 +49,12 @@ These are usability-study decisions, not security claims.
 - Saved-account picker with multiple accounts per website.
 - Sign-in flow with multi-step page continuation.
 - New-account registration with deterministic policy-compatible passwords.
-- Existing-account enrollment through the website’s password-change flow.
-- Per-website password update (the UpSPA protocol’s secret-update operation).
+- Existing-account import that encrypts the entered existing website password directly inside Cj without opening or changing the website.
+- Per-website secret update that rebuilds Cj with the entered current website password and replaces only the local/SP record.
 - Separate master-password update that preserves website accounts.
 - Popup, side-panel, and embedded-panel fallbacks.
 - Event-driven page/form detection for dynamic sites.
-- Encrypted pending registration, secret-update, and continuation material.
+- Encrypted pending registration and continuation material.
 - Unit/integration tests for study flows, page classification, local storage, and protocol helpers.
 - Optional distributed SP and demo-login-server reference stack.
 
@@ -205,7 +207,7 @@ The repository contains no telemetry or analytics pipeline. Any observation, scr
 1. Open a supported login route.
 2. Open the UpSPA popup/side panel.
 3. Select a saved account.
-4. Enter the study master password.
+4. Enter the study master password. Website authentication always requires this explicit check.
 5. Select **Sign in**.
 6. Inspect the filled fields and submit the website form manually.
 
@@ -214,7 +216,7 @@ For multi-step sites, UpSPA stores an encrypted, tab-bound continuation for up t
 ### Create a new website account
 
 1. Open a supported sign-up route or choose **Add another account** → **Create a new account**.
-2. Enter the website account ID and study master password.
+2. Enter the website account ID; enter the study master password only if the extension session is locked.
 3. Review the registry-derived password settings.
 4. Generate and fill the sign-up form.
 5. Submit on the website manually.
@@ -225,22 +227,20 @@ Cancelling or allowing the pending flow to expire does not commit the prepared r
 ### Add an existing account
 
 1. Choose **Add another account** → **Add an existing account**.
-2. Continue to the site’s password-change route.
-3. Enter the account ID, master password, and current website password.
-4. UpSPA encrypts the continuation temporarily, prepares a derived replacement, and fills the password-change fields.
-5. Submit manually.
-6. Confirm **Existing account updated** only after the site succeeds.
+2. Enter the account ID and existing website password; enter the master password only if the extension session is locked.
+3. UpSPA creates and commits a new versioned Cj containing that exact website password.
+4. The extension returns to the saved-account view immediately.
 
-### Update a website password
+No website page is opened, no website field is filled, and no replacement password is generated. Authentication later decrypts and fills the exact imported password.
 
-1. Open the registered password-change route or choose **Update Website Password**.
+### Update a saved website secret
+
+1. Choose **Refresh Saved Website Record**.
 2. Select the exact saved account.
-3. Enter the master password and review the generated candidate.
-4. Let UpSPA fill current/new/confirmation fields.
-5. Submit manually.
-6. Choose **Password changed** only after website acceptance; choose **Website rejected it** to retry without committing.
+3. Enter the current website password and unlock with the master password if the extension session is locked.
+4. UpSPA decrypts the existing record to advance its counter, creates a new Cj containing the exact entered website password, and replaces the local/SP record.
 
-This maps to UpSPA’s **secret update**, not its master-password update.
+No new website password is generated, no website field is filled, and no website form is submitted. Because there is deliberately no website interaction, UpSPA cannot verify whether the entered value matches the live website; a mistyped value will also be protected and used by later authentication.
 
 ### Update the master password
 
@@ -249,7 +249,7 @@ This maps to UpSPA’s **secret update**, not its master-password update.
 3. Enter and confirm a new master password.
 4. Complete the checklist and confirm the update.
 
-Saved website-account records remain available. Use the new master password for the next sensitive action.
+Saved website-account records remain available, and the new master password replaces the old value in the temporary unlocked session.
 
 The complete facilitator and reset checklist is in [User-study guide](docs/USER_STUDY.md).
 
@@ -330,11 +330,12 @@ The prototype stores data only in the extension profile unless a developer expli
 | Study configuration and setup flag | `chrome.storage.local` | Includes UID, mode, threshold, and SP descriptors |
 | Local SP setup/records | `chrome.storage.local` | Includes opaque ciphertext records and the one local key share |
 | Saved site-account metadata | `chrome.storage.local` | Origin/account ID, policy, counters, and protocol identifiers |
-| Pending registration/update material | `chrome.storage.local` | Encrypted with a key derived from the study master password |
+| Pending registration material | `chrome.storage.local` | Encrypted with a key derived from the study master password |
 | Multi-step credential continuation | Encrypted blob in `chrome.storage.local` | Random vault key normally lives in `chrome.storage.session`; local fallback exists |
 | Active flow metadata | `chrome.storage.session` when available | No plaintext master password is stored in flow metadata |
+| Unlocked master-password session | `chrome.storage.session` only | Plaintext, extension-context-only, sliding 30-minute expiry; cleared by **Lock** or browser shutdown |
 
-The extension does not persist the plaintext master password. Sensitive multi-step website material can exist encrypted for up to 30 minutes and should be cleared by flow completion, cancellation, expiry, or profile disposal.
+The study build never writes the plaintext master password to persistent/local storage. It keeps the password only in Chrome's in-memory extension session store for up to 30 minutes so registration, Cj refresh, and continuation steps do not repeatedly prompt. A saved-account website sign-in still requires the participant to enter the master password explicitly. **Lock**, expiry, or browser shutdown clears the temporary value. Sensitive multi-step website material can exist encrypted for up to 30 minutes and should be cleared by flow completion, cancellation, expiry, or profile disposal.
 
 ## Known limitations
 
