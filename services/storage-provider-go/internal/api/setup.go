@@ -1,4 +1,5 @@
 package api
+
 import (
 	"context"
 	"errors"
@@ -6,18 +7,22 @@ import (
 	spcrypto "upspa/internal/crypto"
 	"upspa/internal/model"
 )
+
 const (
-	lenUIDMin     = 1
-	lenSUID       = 32
-	lenCipherIDCt = 96
-	lenCipherSpCt = 40
+	lenUIDMin           = 1
+	lenSUID             = 32
+	lenCipherIDCt       = 96
+	lenCipherSpLegacyCt = 40
+	lenCipherSpV2Ct     = 1039
 )
+
 var (
 	ErrInvalidBase64 = errors.New("invalid base64url encoding")
 	ErrInvalidLength = errors.New("invalid decoded byte length")
 	ErrNotFound      = errors.New("record not found")
 	ErrConflict      = errors.New("record conflict")
 )
+
 type Store interface {
 	PutSetup(ctx context.Context, uid, sigPk, cidNonce, cidCt, cidTag, kI string) (bool, error)
 	GetSetup(ctx context.Context, uid string) (sigPk, cidNonce, cidCt, cidTag, kI string, lastTs int64, found bool, err error)
@@ -32,6 +37,7 @@ type Handler struct {
 	store Store
 	spID  uint32
 }
+
 func NewHandler(s Store, spID ...uint32) *Handler {
 	id := uint32(1)
 	if len(spID) > 0 && spID[0] != 0 {
@@ -63,6 +69,29 @@ func canonicalCtBlob(b model.CtBlob, ctLen int) (nonceRaw, ctRaw, tagRaw []byte,
 	ctRaw, canon.Ct, err = decodeFixed(b.Ct, ctLen)
 	if err != nil {
 		return nil, nil, nil, canon, err
+	}
+	tagRaw, canon.Tag, err = decodeFixed(b.Tag, spcrypto.LenCtBlobTag)
+	if err != nil {
+		return nil, nil, nil, canon, err
+	}
+	return nonceRaw, ctRaw, tagRaw, canon, nil
+}
+
+// Cj has two wire-compatible formats: the original 40-byte generated-secret
+// record and the fixed-size, padded 1039-byte website-password record. Keeping
+// the accepted lengths exact prevents this opaque storage service from
+// becoming an unbounded blob store and prevents password-length disclosure.
+func canonicalCipherSpCtBlob(b model.CtBlob) (nonceRaw, ctRaw, tagRaw []byte, canon model.CtBlob, err error) {
+	nonceRaw, canon.Nonce, err = decodeFixed(b.Nonce, spcrypto.LenCtBlobNonce)
+	if err != nil {
+		return nil, nil, nil, canon, err
+	}
+	ctRaw, canon.Ct, err = decodeFixed(b.Ct, -1)
+	if err != nil {
+		return nil, nil, nil, canon, err
+	}
+	if len(ctRaw) != lenCipherSpLegacyCt && len(ctRaw) != lenCipherSpV2Ct {
+		return nil, nil, nil, canon, ErrInvalidLength
 	}
 	tagRaw, canon.Tag, err = decodeFixed(b.Tag, spcrypto.LenCtBlobTag)
 	if err != nil {

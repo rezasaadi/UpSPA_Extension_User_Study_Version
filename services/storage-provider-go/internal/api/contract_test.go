@@ -1,9 +1,9 @@
 package api
 
 import (
-	_ "embed"
 	"bytes"
 	"context"
+	_ "embed"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -199,6 +199,28 @@ func TestContract_RecordCreate_201(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/v1/records", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	h.assertResponse(t, req, handler.RecordCreate, http.StatusCreated)
+}
+
+func TestContract_RecordCreate_V2_201(t *testing.T) {
+	h := newContractHarness(t)
+	handler := NewHandler(NewFakeStore())
+
+	body := `{"suid_b64":"` + b64nContract(32) + `","cj":{"nonce":"` + b64nContract(24) +
+		`","ct":"` + b64nContract(1039) + `","tag":"` + b64nContract(16) + `"}}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/records", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	h.assertResponse(t, req, handler.RecordCreate, http.StatusCreated)
+}
+
+func TestContract_RecordCreate_RejectsUnknownCjLength(t *testing.T) {
+	h := newContractHarness(t)
+	handler := NewHandler(NewFakeStore())
+
+	body := `{"suid_b64":"` + b64nContract(32) + `","cj":{"nonce":"` + b64nContract(24) +
+		`","ct":"` + b64nContract(41) + `","tag":"` + b64nContract(16) + `"}}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/records", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	h.assertResponse(t, req, handler.RecordCreate, http.StatusBadRequest)
 }
 
 func TestContract_RecordCreate_409_Conflict(t *testing.T) {

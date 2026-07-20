@@ -1,8 +1,10 @@
 package api
+
 import (
 	"net/http"
 	"upspa/internal/model"
 )
+
 func (h *Handler) RecordCreate(w http.ResponseWriter, r *http.Request) {
 	var req model.RecordCreateRequest
 	if err := ReadJSON(w, r, &req); err != nil {
@@ -14,7 +16,7 @@ func (h *Handler) RecordCreate(w http.ResponseWriter, r *http.Request) {
 		badField(w, "invalid_suid", "suid_b64")
 		return
 	}
-	_, _, _, cjCanon, err := canonicalCtBlob(req.CJ, lenCipherSpCt)
+	_, _, _, cjCanon, err := canonicalCipherSpCtBlob(req.CJ)
 	if err != nil {
 		badField(w, "invalid_cj", "cj")
 		return
@@ -58,7 +60,7 @@ func (h *Handler) RecordUpdate(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, "invalid_json", "invalid JSON body", nil)
 		return
 	}
-	_, _, _, cjCanon, err := canonicalCtBlob(req.CJ, lenCipherSpCt)
+	_, _, _, cjCanon, err := canonicalCipherSpCtBlob(req.CJ)
 	if err != nil {
 		badField(w, "invalid_cj", "cj")
 		return

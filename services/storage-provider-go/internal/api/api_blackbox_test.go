@@ -231,7 +231,7 @@ func TestBlackbox_Record_CRUDLifecycle(t *testing.T) {
 	// PUT → 200
 	newCj := map[string]string{
 		"nonce": testUID(24, 0x35),
-		"ct":    testUID(40, 0x36),
+		"ct":    testUID(1039, 0x36),
 		"tag":   testUID(16, 0x37),
 	}
 	resp = doJSON(t, srv, http.MethodPut, fmt.Sprintf("/v1/records/%s", suid), map[string]any{"cj": newCj})
