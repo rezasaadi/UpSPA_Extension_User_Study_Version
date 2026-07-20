@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>UpSPA</title>
+    <link rel="stylesheet" href="./popup.css" />
+  </head>
+  <body>
+    <main id="app" class="upspa-card" data-screen="dashboard" data-layout="auth">
+      <div class="logo-badge" aria-label="UpSPA"><span class="logo-mark" aria-hidden="true"></span><strong>upSPA</strong></div>
+      <aside class="workflow-rail" aria-label="UpSPA actions">
+        <button id="railAddAccount" class="rail-button" type="button" aria-label="Add another account"><span class="rail-icon add" aria-hidden="true"></span></button>
+        <button id="railSavedAccounts" class="rail-button" type="button" aria-label="Saved accounts"><span class="rail-icon saved" aria-hidden="true"></span></button>
+        <button id="lockSession" class="rail-button rail-lock" type="button" aria-label="Lock extension"><span class="rail-icon lock" aria-hidden="true"></span></button>
+      </aside>
+
+      <section id="screen-setup-required" class="screen hidden">
+        <header class="auth-header">
+          <h2>Set up UpSPA</h2>
+          <p>Create your UpSPA account before using website credentials.</p>
+        </header>
+        <div class="checklist-card">
+          <span class="checkmark" aria-hidden="true"></span>
+          <p>Setup creates one local Storage Provider automatically for this prototype.</p>
+        </div>
+        <button id="openSetup" class="primary-button" type="button">Continue setup</button>
+      </section>
+
+      <section id="screen-unsupported" class="screen hidden">
+        <header class="auth-header">
+          <h2>Website not supported</h2>
+          <p id="unsupportedMessage">This page is not in the UpSPA prototype registry.</p>
+        </header>
+      </section>
+
+      <section id="screen-error" class="screen hidden">
+        <header class="auth-header">
+          <h2>Something needs attention</h2>
+          <p>Review the message below, then reopen the extension when you are ready to continue.</p>
+        </header>
+      </section>
+
+      <section id="screen-dashboard" class="screen hidden">
+        <header class="sidebar-header">
+          <span class="header-icon bookmark" aria-hidden="true"></span>
+          <div>
+            <h2 id="dashboardTitle">UpSPA dashboard</h2>
+            <p id="activeSiteSummary"></p>
+          </div>
+        </header>
+        <div id="dashboardAccounts" class="saved-list scroll-list" aria-label="Saved accounts"></div>
+        <button id="dashboardSignIn" class="primary-button" type="button">Sign in with saved account</button>
+        <button id="dashboardUpdateWebsitePassword" class="secondary-button" type="button">Refresh Saved Website Record</button>
+        <button id="dashboardAddAccount" class="secondary-button" type="button">Add another account</button>
+        <button id="dashboardMasterPassword" class="text-button" type="button">Update Master Password</button>
+      </section>
+
+      <section id="screen-account-picker" class="screen hidden">
+        <header class="sidebar-header narrow-content">
+          <span class="header-icon bookmark" aria-hidden="true"></span>
+          <div>
+            <h2 id="pickerTitle">Choose an account</h2>
+            <p id="pickerDescription"></p>
+          </div>
+        </header>
+        <div id="pickerAccounts" class="saved-list scroll-list narrow-content" aria-label="Accounts for this website"></div>
+        <button id="pickerContinue" class="primary-button narrow-content" type="button">Continue</button>
+        <button id="pickerAddAccount" class="secondary-button narrow-content" type="button">Add another account</button>
+        <button id="pickerMasterPassword" class="text-button narrow-content" type="button">Update Master Password</button>
+      </section>
+
+      <section id="screen-add-account-choice" class="screen hidden">
+        <header class="auth-header">
+          <h2>Add another account</h2>
+          <p>Choose whether you are creating a new website account or enrolling one you already use.</p>
+        </header>
+        <button id="createNewAccount" class="primary-button" type="button">Create a new account</button>
+        <button id="addExistingAccount" class="secondary-button" type="button">Add an existing account</button>
+        <button id="choiceBack" class="text-button" type="button">Back to accounts</button>
+      </section>
+
+      <section id="screen-master-auth" class="screen hidden">
+        <header class="auth-header">
+          <h2>Sign in</h2>
+          <p>Enter your master password to retrieve this website password.</p>
+        </header>
+        <div class="account-summary">
+          <span id="masterAuthSite" class="visually-hidden"></span>
+          <label class="field">E-mail<div class="input-box"><input id="masterAuthAccount" readonly /></div></label>
+        </div>
+        <label id="masterAuthPasswordField" class="field">Master password<div class="input-box"><input id="masterAuthPassword" type="password" autocomplete="current-password" /></div></label>
+        <button id="authenticate" class="primary-button" type="button">Sign in</button>
+        <button id="masterAuthAddAccount" class="text-button" type="button">Add another account</button>
+      </section>
+
+      <section id="screen-site-account-details" class="screen hidden">
+        <header class="auth-header">
+          <h2 id="detailsTitle">Save Login Information</h2>
+          <p id="detailsDescription"></p>
+        </header>
+        <label class="field">Website<div id="detailsSite" class="origin"></div></label>
+        <label class="field">E-mail or account ID<div class="input-box"><input id="siteAccountId" autocomplete="username" /></div></label>
+        <label id="detailsMasterField" class="field">Master password<div class="input-box"><input id="siteDetailsMasterPassword" type="password" autocomplete="current-password" /></div></label>
+        <button id="detailsContinue" class="primary-button" type="button">Continue</button>
+        <button id="detailsCancel" class="text-button" type="button">Cancel</button>
+      </section>
+
+      <section id="screen-site-password-settings" class="screen hidden">
+        <header class="auth-header">
+          <h2 id="settingsTitle">Password settings</h2>
+          <p id="settingsDescription"></p>
+        </header>
+        <div id="policyCard" class="policy-card">
+          <div class="policy-grid">
+            <label>Min<input id="policyMinLen" type="number" min="1" /></label>
+            <label>Max<input id="policyMaxLen" type="number" min="1" /></label>
+          </div>
+          <label class="check"><input id="policyUpper" type="checkbox" />Uppercase</label>
+          <label class="check"><input id="policyLower" type="checkbox" />Lowercase</label>
+          <label class="check"><input id="policyDigit" type="checkbox" />Digit</label>
+          <label class="check"><input id="policySymbol" type="checkbox" />Symbol</label>
+          <label class="check"><input id="policyWhitespace" type="checkbox" />Forbid whitespace</label>
+          <label class="hidden">Allowed symbols<input id="policySymbols" /></label>
+          <label class="hidden">Forbidden strings<input id="policyForbidden" /></label>
+          <p id="policyEvidence" class="small"></p>
+        </div>
+        <label id="settingsMasterField" class="field">Master password<div class="input-box"><input id="settingsMasterPassword" type="password" autocomplete="current-password" /></div></label>
+        <label id="existingPasswordField" class="field hidden">Current website password<div class="input-box"><input id="existingWebsitePassword" type="password" autocomplete="current-password" /></div></label>
+        <label id="candidateField" class="field hidden">Generated website password<div class="input-box"><input id="candidatePassword" type="password" readonly /></div></label>
+        <button id="settingsSubmit" class="primary-button" type="button">Prepare and fill</button>
+        <button id="generateCandidate" class="secondary-button" type="button">Generate another password</button>
+        <button id="settingsCancel" class="text-button" type="button">Cancel</button>
+      </section>
+
+      <section id="screen-waiting-confirmation" class="screen hidden">
+        <header class="auth-header">
+          <h2 id="waitingTitle">Waiting for confirmation</h2>
+          <p id="waitingDescription"></p>
+        </header>
+        <div class="checklist-card"><span class="checkmark" aria-hidden="true"></span><p id="waitingDetail"></p></div>
+        <label id="confirmationMasterField" class="field">Master password<div class="input-box"><input id="confirmationMasterPassword" type="password" autocomplete="current-password" /></div></label>
+        <button id="confirmOperation" class="primary-button" type="button">Confirm</button>
+        <button id="resumePendingFill" class="secondary-button hidden" type="button">Fill website form again</button>
+        <button id="cancelOperation" class="text-button" type="button">Cancel</button>
+      </section>
+
+      <section id="screen-operation-success" class="screen hidden">
+        <header class="auth-header">
+          <h2 id="successTitle">Success</h2>
+          <p id="successDescription"></p>
+        </header>
+        <div class="success-illustration"><span class="checkmark large" aria-hidden="true"></span></div>
+        <button id="successDone" class="primary-button" type="button">Done</button>
+      </section>
+
+      <section id="screen-master-password-current" class="screen hidden">
+        <header class="auth-header">
+          <h2>Update Master Password</h2>
+          <p>Verify your current master password first.</p>
+        </header>
+        <label id="masterCurrentPasswordField" class="field">Current master password<div class="input-box"><input id="masterCurrentPassword" type="password" autocomplete="current-password" /></div></label>
+        <button id="verifyMasterPassword" class="primary-button" type="button">Verify</button>
+        <button id="masterUpdateCancel" class="text-button" type="button">Cancel</button>
+      </section>
+
+      <section id="screen-master-password-new" class="screen hidden">
+        <header class="auth-header">
+          <h2>Create a new master password</h2>
+          <p>Choose a password that is not used on any website.</p>
+        </header>
+        <label class="field">New master password<div class="input-box"><input id="masterNewPassword" type="password" autocomplete="new-password" /></div></label>
+        <label class="field">Confirm new master password<div class="input-box"><input id="masterNewPasswordConfirm" type="password" autocomplete="new-password" /></div></label>
+        <button id="masterNewContinue" class="primary-button" type="button">Continue</button>
+      </section>
+
+      <section id="screen-master-password-checklist" class="screen hidden">
+        <header class="auth-header">
+          <h2>Before you continue</h2>
+          <p>Review this quick personal-information checklist.</p>
+        </header>
+        <div class="settings-list">
+          <label class="check"><input id="masterChecklistPersonal" type="checkbox" />Does not include my name or email</label>
+          <label class="check"><input id="masterChecklistUnique" type="checkbox" />Not reused on a website</label>
+          <label class="check"><input id="masterChecklistSafe" type="checkbox" />I can keep it private</label>
+        </div>
+        <button id="masterUpdateCommit" class="primary-button" type="button">Update Master Password</button>
+        <button id="masterChecklistBack" class="text-button" type="button">Revise password</button>
+      </section>
+
+      <section id="screen-master-password-success" class="screen hidden">
+        <header class="auth-header">
+          <h2>Master password updated</h2>
+          <p>Your saved website accounts remain available. Use the new master password next time.</p>
+        </header>
+        <div class="success-illustration"><span class="checkmark large" aria-hidden="true"></span></div>
+        <button id="masterSuccessDone" class="primary-button" type="button">Done</button>
+      </section>
+
+      <div id="status" class="status" role="status"></div>
+    </main>
+    <script type="module" src="./popup.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>UpSPA Setup</title>
+    <link rel="stylesheet" href="./options.css" />
+  </head>
+  <body>
+    <main class="setup-shell">
+      <section class="setup-card">
+        <div class="logo-badge" aria-label="UpSPA"><span class="logo-mark" aria-hidden="true"></span><strong>upSPA</strong></div>
+
+        <section id="setup-master" class="setup-screen">
+          <header>
+            <h1>Create an account</h1>
+            <p class="lede">This is the only password you must remember.</p>
+          </header>
+          <label>E-mail<input id="uid" autocomplete="username" placeholder="janedoe@example.com" /></label>
+          <label>Master Password<input id="password" type="password" autocomplete="new-password" /></label>
+          <label>Confirm Master Password<input id="passwordConfirm" type="password" autocomplete="new-password" /></label>
+          <button id="setupContinue" class="primary-button" type="button">Check your password</button>
+        </section>
+
+        <section id="setup-checklist" class="setup-screen hidden">
+          <header>
+            <h1>Check your password</h1>
+            <p class="lede">Make sure your password does not include personal information.</p>
+          </header>
+          <label class="check"><input id="checkPersonal" type="checkbox" />It does not include my name or email.</label>
+          <label class="check"><input id="checkUnique" type="checkbox" />It is not used on a website.</label>
+          <label class="check"><input id="checkPrivate" type="checkbox" />I can keep it private.</label>
+          <button id="setupChecklistContinue" class="primary-button" type="button">Confirm</button>
+          <button id="setupChecklistBack" class="text-button" type="button">Revise password</button>
+        </section>
+
+        <section id="setup-review" class="setup-screen hidden">
+          <header>
+            <h1>You're ready to start</h1>
+            <p class="lede">UpSPA will provision your local Storage Provider automatically.</p>
+          </header>
+          <div class="notice"><span class="checkmark" aria-hidden="true"></span><p>Your master password stays in the extension and is never sent to a website.</p></div>
+          <button id="setupConfirm" class="primary-button" type="button">Create account</button>
+          <button id="setupReviewBack" class="text-button" type="button">Back</button>
+        </section>
+
+        <section id="setup-success" class="setup-screen hidden">
+          <header>
+            <h1>Your account has been created successfully!</h1>
+            <p class="lede">Your study setup is stored in this Chrome profile.</p>
+          </header>
+          <p class="remember">Don't forget to remember your master password.</p>
+          <div class="success-illustration"><span class="checkmark large" aria-hidden="true"></span></div>
+          <button id="returnToSite" class="primary-button hidden" type="button">Let's start</button>
+        </section>
+
+        <pre id="status">Ready.</pre>
+      </section>
+    </main>
+    <script type="module" src="./options.ts"></script>
+  </body>
+</html>
